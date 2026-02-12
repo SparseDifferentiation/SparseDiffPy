@@ -9,43 +9,76 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Only cancels-in-progress on PRs (head_ref only defined in PR, fallback run_id always unique)
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   build_wheels:
-    name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-13, macos-14]
+        os: [ ubuntu-22.04, macos-14, windows-2022 ]
+        python-version: [ "3.11", "3.12", "3.13", "3.14" ]
+
+    env:
+      PYTHON_VERSION: ${{ matrix.python-version }}
+
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
-          submodules: true
+          submodules: recursive
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          allow-prereleases: true
+
+      - name: Set Python subversion
+        shell: bash
+        run: |
+          echo "PYTHON_SUBVERSION=$(echo $PYTHON_VERSION | cut -c 3-)" >> $GITHUB_ENV
+
+      - name: Set up QEMU
+        if: runner.os == 'Linux'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: all
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.22.0
         env:
-          CIBW_BUILD: "cp311-* cp312-* cp313-* cp314-*"
-          CIBW_ARCHS_MACOS: "x86_64 arm64"
+          CIBW_BUILD: "cp3${{ env.PYTHON_SUBVERSION }}-*"
+          CIBW_SKIP: "*-win32 *-manylinux_i686 *-musllinux*"
+          CIBW_ARCHS_MACOS: "x86_64 universal2"
+          CIBW_ARCHS_LINUX: "auto aarch64"
+
+      - name: Check wheels
+        shell: bash
+        run: |
+          pip install --upgrade twine
+          twine check wheelhouse/*
 
       - uses: actions/upload-artifact@v4
         with:
-          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
+          name: wheels-${{ matrix.os }}-${{ matrix.python-version }}
           path: ./wheelhouse/*.whl
 
   build_sdist:
-    name: Build source distribution
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
-          submodules: true
+          submodules: recursive
 
       - name: Build sdist
         run: pipx run build --sdist
 
       - uses: actions/upload-artifact@v4
         with:
-          name: cibw-sdist
+          name: sdist
           path: ./dist/*.tar.gz
 
   upload_testpypi:
@@ -58,7 +91,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: cibw-*
+          pattern: "{wheels-*,sdist}"
           path: dist
           merge-multiple: true
 
@@ -77,7 +110,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with:
-          pattern: cibw-*
+          pattern: "{wheels-*,sdist}"
           path: dist
           merge-multiple: true
 
