@@ -1,0 +1,3 @@
+[submodule "SparseDiffEngine"]
+	path = SparseDiffEngine
+	url = https://github.com/SparseDifferentiation/SparseDiffEngine
