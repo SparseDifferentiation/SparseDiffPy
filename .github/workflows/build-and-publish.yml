@@ -8,6 +8,16 @@ on:
       - 'v*'
   pull_request:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish to PyPI (testpypi, pypi, or none)'
+        required: false
+        default: 'none'
+        type: choice
+        options:
+          - none
+          - testpypi
+          - pypi
 
 # Only cancels-in-progress on PRs (head_ref only defined in PR, fallback run_id always unique)
 concurrency:
@@ -87,7 +97,9 @@ jobs:
     environment: testpypi
     permissions:
       id-token: write
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && (inputs.publish == 'testpypi' || inputs.publish == 'pypi'))
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -106,7 +118,9 @@ jobs:
     environment: pypi
     permissions:
       id-token: write
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'workflow_dispatch' && inputs.publish == 'pypi')
     steps:
       - uses: actions/download-artifact@v4
         with:
