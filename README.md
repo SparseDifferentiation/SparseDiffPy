@@ -1,6 +1,6 @@
 # SparseDiffPy
 
-Python bindings for [SparseDiffEngine](https://github.com/SparseDifferentiation/SparseDiffEngine), a C library for automatic differentiation with sparse derivative computation.
+Python bindings for [SparseDiffEngine](https://github.com/SparseDifferentiation/SparseDiffEngine), a C library for computing sparse Jacobians and Hessians.
 
 ## Installation
 
