@@ -65,14 +65,8 @@ static PyObject *py_make_left_matmul(PyObject *self, PyObject *args)
     expr *param_node;
     if (param_obj == Py_None)
     {
-        /* Fixed constant: create column-major values for the parameter node */
-        double *col_major = (double *) calloc(m * n, sizeof(double));
-        for (int row = 0; row < m; row++)
-            for (int k = csr_indptr[row]; k < csr_indptr[row + 1]; k++)
-                col_major[row + csr_indices[k] * m] = csr_data[k];
-
-        param_node = new_parameter(m, n, PARAM_FIXED, child->n_vars, col_major);
-        free(col_major);
+        /* Fixed constant: pass CSR data directly (values are already in CSR order) */
+        param_node = new_parameter(nnz, 1, PARAM_FIXED, child->n_vars, csr_data);
 
         if (!param_node)
         {
