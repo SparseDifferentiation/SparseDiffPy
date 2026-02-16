@@ -3,9 +3,10 @@
 
 #include "bivariate.h"
 #include "common.h"
+#include "subexpr.h"
 
-/* Constant vector elementwise multiplication: a ∘ f(x) where a is a constant vector
- */
+/* Constant vector elementwise multiplication: a ∘ f(x) where a is a constant vector.
+ * Creates a fixed parameter node for the vector and calls new_vector_mult. */
 static PyObject *py_make_const_vector_mult(PyObject *self, PyObject *args)
 {
     PyObject *child_capsule;
@@ -42,14 +43,24 @@ static PyObject *py_make_const_vector_mult(PyObject *self, PyObject *args)
 
     double *a_data = (double *) PyArray_DATA(a_array);
 
-    expr *node = new_const_vector_mult(a_data, child);
-
+    /* Create a fixed parameter node for the vector */
+    expr *a_node = new_parameter(child->d1, child->d2, PARAM_FIXED, child->n_vars,
+                                 a_data);
     Py_DECREF(a_array);
+
+    if (!a_node)
+    {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "failed to create vector parameter node");
+        return NULL;
+    }
+
+    expr *node = new_vector_mult(a_node, child);
 
     if (!node)
     {
         PyErr_SetString(PyExc_RuntimeError,
-                        "failed to create const_vector_mult node");
+                        "failed to create vector_mult node");
         return NULL;
     }
     expr_retain(node); /* Capsule owns a reference */
