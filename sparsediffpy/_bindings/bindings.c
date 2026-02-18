@@ -122,7 +122,7 @@ static PyMethodDef DNLPMethods[] = {
     {"make_param_vector_mult", py_make_param_vector_mult, METH_VARARGS,
      "Create vector mult from parameter (p ∘ f(x))"},
     {"make_right_matmul", py_make_right_matmul, METH_VARARGS,
-     "Create right matmul node (f(x) @ A)"},
+     "Create right matmul node (f(x) @ A): pass None or param capsule as first arg"},
     {"make_quad_form", py_make_quad_form, METH_VARARGS,
      "Create quadratic form node (x' * Q * x)"},
     {"make_quad_over_lin", py_make_quad_over_lin, METH_VARARGS,
