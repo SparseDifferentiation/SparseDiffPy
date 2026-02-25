@@ -120,4 +120,99 @@ static PyObject *py_get_hessian(PyObject *self, PyObject *args)
     return Py_BuildValue("(OOO(ii))", data, indices, indptr, H->m, H->n);
 }
 
+static PyObject *py_get_hessian_sparsity_coo(PyObject *self, PyObject *args)
+{
+    PyObject *prob_capsule;
+    if (!PyArg_ParseTuple(args, "O", &prob_capsule))
+    {
+        return NULL;
+    }
+
+    problem *prob =
+        (problem *) PyCapsule_GetPointer(prob_capsule, PROBLEM_CAPSULE_NAME);
+    if (!prob)
+    {
+        PyErr_SetString(PyExc_ValueError, "invalid problem capsule");
+        return NULL;
+    }
+
+    if (!prob->lagrange_hessian_coo)
+    {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "hessian COO not initialized - call "
+                        "problem_init_hessian_coo_lower_triangular first");
+        return NULL;
+    }
+
+    COO_Matrix *coo = prob->lagrange_hessian_coo;
+    npy_intp nnz = coo->nnz;
+
+    PyObject *rows = PyArray_SimpleNew(1, &nnz, NPY_INT32);
+    PyObject *cols = PyArray_SimpleNew(1, &nnz, NPY_INT32);
+
+    if (!rows || !cols)
+    {
+        Py_XDECREF(rows);
+        Py_XDECREF(cols);
+        return NULL;
+    }
+
+    memcpy(PyArray_DATA((PyArrayObject *) rows), coo->rows, nnz * sizeof(int));
+    memcpy(PyArray_DATA((PyArrayObject *) cols), coo->cols, nnz * sizeof(int));
+
+    return Py_BuildValue("(OO(ii))", rows, cols, coo->m, coo->n);
+}
+
+static PyObject *py_eval_hessian_vals_coo(PyObject *self, PyObject *args)
+{
+    PyObject *prob_capsule;
+    double obj_factor;
+    PyObject *lagrange_obj;
+
+    if (!PyArg_ParseTuple(args, "OdO", &prob_capsule, &obj_factor, &lagrange_obj))
+    {
+        return NULL;
+    }
+
+    problem *prob =
+        (problem *) PyCapsule_GetPointer(prob_capsule, PROBLEM_CAPSULE_NAME);
+    if (!prob)
+    {
+        PyErr_SetString(PyExc_ValueError, "invalid problem capsule");
+        return NULL;
+    }
+
+    /* Convert lagrange to contiguous C array */
+    PyArrayObject *lagrange_arr = (PyArrayObject *) PyArray_FROM_OTF(
+        lagrange_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+    if (!lagrange_arr)
+    {
+        return NULL;
+    }
+
+    double *lagrange = (double *) PyArray_DATA(lagrange_arr);
+
+    /* Compute Hessian */
+    problem_hessian(prob, obj_factor, lagrange);
+
+    Py_DECREF(lagrange_arr);
+
+    /* Refresh COO values from the CSR Hessian */
+    refresh_lower_triangular_coo(prob->lagrange_hessian_coo,
+                                 prob->lagrange_hessian->x);
+
+    COO_Matrix *coo = prob->lagrange_hessian_coo;
+    npy_intp nnz = coo->nnz;
+
+    PyObject *data = PyArray_SimpleNew(1, &nnz, NPY_DOUBLE);
+    if (!data)
+    {
+        return NULL;
+    }
+
+    memcpy(PyArray_DATA((PyArrayObject *) data), coo->x, nnz * sizeof(double));
+
+    return data;
+}
+
 #endif /* PROBLEM_HESSIAN_H */
