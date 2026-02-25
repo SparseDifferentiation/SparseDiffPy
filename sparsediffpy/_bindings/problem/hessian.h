@@ -120,7 +120,7 @@ static PyObject *py_get_hessian(PyObject *self, PyObject *args)
     return Py_BuildValue("(OOO(ii))", data, indices, indptr, H->m, H->n);
 }
 
-static PyObject *py_get_hessian_sparsity_coo(PyObject *self, PyObject *args)
+static PyObject *py_get_problem_hessian_sparsity_coo(PyObject *self, PyObject *args)
 {
     PyObject *prob_capsule;
     if (!PyArg_ParseTuple(args, "O", &prob_capsule))
@@ -163,7 +163,7 @@ static PyObject *py_get_hessian_sparsity_coo(PyObject *self, PyObject *args)
     return Py_BuildValue("(OO(ii))", rows, cols, coo->m, coo->n);
 }
 
-static PyObject *py_eval_hessian_vals_coo(PyObject *self, PyObject *args)
+static PyObject *py_problem_eval_hessian_vals_coo(PyObject *self, PyObject *args)
 {
     PyObject *prob_capsule;
     double obj_factor;

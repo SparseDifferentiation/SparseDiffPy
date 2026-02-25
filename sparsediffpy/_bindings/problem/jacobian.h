@@ -145,7 +145,7 @@ static PyObject *py_get_jacobian_sparsity_coo(PyObject *self, PyObject *args)
     return Py_BuildValue("(OO(ii))", rows, cols, coo->m, coo->n);
 }
 
-static PyObject *py_eval_jacobian_vals(PyObject *self, PyObject *args)
+static PyObject *py_problem_eval_jacobian_vals(PyObject *self, PyObject *args)
 {
     PyObject *prob_capsule;
     if (!PyArg_ParseTuple(args, "O", &prob_capsule))
