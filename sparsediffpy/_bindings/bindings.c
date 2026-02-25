@@ -150,6 +150,19 @@ static PyMethodDef DNLPMethods[] = {
      "Compute Lagrangian Hessian"},
     {"get_hessian", py_get_hessian, METH_VARARGS,
      "Get Lagrangian Hessian without recomputing"},
+    {"problem_init_jacobian_coo", py_problem_init_jacobian_coo, METH_VARARGS,
+     "Initialize Jacobian COO structures"},
+    {"get_jacobian_sparsity_coo", py_get_jacobian_sparsity_coo, METH_VARARGS,
+     "Get Jacobian sparsity in COO format"},
+    {"problem_eval_jacobian_vals", py_problem_eval_jacobian_vals, METH_VARARGS,
+     "Evaluate Jacobian and return values array"},
+    {"problem_init_hessian_coo_lower_triangular",
+     py_problem_init_hessian_coo_lower_triangular, METH_VARARGS,
+     "Initialize lower-triangular Hessian COO structures"},
+    {"get_problem_hessian_sparsity_coo", py_get_problem_hessian_sparsity_coo, METH_VARARGS,
+     "Get Hessian sparsity in COO format (lower triangular)"},
+    {"problem_eval_hessian_vals_coo", py_problem_eval_hessian_vals_coo, METH_VARARGS,
+     "Evaluate Hessian and return COO values array"},
     {NULL, NULL, 0, NULL}};
 
 static struct PyModuleDef sparsediffpy_module = {

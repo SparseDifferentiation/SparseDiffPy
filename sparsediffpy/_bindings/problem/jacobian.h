@@ -102,4 +102,79 @@ static PyObject *py_get_jacobian(PyObject *self, PyObject *args)
     return Py_BuildValue("(OOO(ii))", data, indices, indptr, jac->m, jac->n);
 }
 
+static PyObject *py_get_jacobian_sparsity_coo(PyObject *self, PyObject *args)
+{
+    PyObject *prob_capsule;
+    if (!PyArg_ParseTuple(args, "O", &prob_capsule))
+    {
+        return NULL;
+    }
+
+    problem *prob =
+        (problem *) PyCapsule_GetPointer(prob_capsule, PROBLEM_CAPSULE_NAME);
+    if (!prob)
+    {
+        PyErr_SetString(PyExc_ValueError, "invalid problem capsule");
+        return NULL;
+    }
+
+    if (!prob->jacobian_coo)
+    {
+        PyErr_SetString(
+            PyExc_RuntimeError,
+            "jacobian COO not initialized - call problem_init_jacobian_coo first");
+        return NULL;
+    }
+
+    COO_Matrix *coo = prob->jacobian_coo;
+    npy_intp nnz = coo->nnz;
+
+    PyObject *rows = PyArray_SimpleNew(1, &nnz, NPY_INT32);
+    PyObject *cols = PyArray_SimpleNew(1, &nnz, NPY_INT32);
+
+    if (!rows || !cols)
+    {
+        Py_XDECREF(rows);
+        Py_XDECREF(cols);
+        return NULL;
+    }
+
+    memcpy(PyArray_DATA((PyArrayObject *) rows), coo->rows, nnz * sizeof(int));
+    memcpy(PyArray_DATA((PyArrayObject *) cols), coo->cols, nnz * sizeof(int));
+
+    return Py_BuildValue("(OO(ii))", rows, cols, coo->m, coo->n);
+}
+
+static PyObject *py_problem_eval_jacobian_vals(PyObject *self, PyObject *args)
+{
+    PyObject *prob_capsule;
+    if (!PyArg_ParseTuple(args, "O", &prob_capsule))
+    {
+        return NULL;
+    }
+
+    problem *prob =
+        (problem *) PyCapsule_GetPointer(prob_capsule, PROBLEM_CAPSULE_NAME);
+    if (!prob)
+    {
+        PyErr_SetString(PyExc_ValueError, "invalid problem capsule");
+        return NULL;
+    }
+
+    problem_jacobian(prob);
+
+    CSR_Matrix *jac = prob->jacobian;
+    npy_intp nnz = jac->nnz;
+
+    PyObject *data = PyArray_SimpleNew(1, &nnz, NPY_DOUBLE);
+    if (!data)
+    {
+        return NULL;
+    }
+
+    memcpy(PyArray_DATA((PyArrayObject *) data), jac->x, nnz * sizeof(double));
+
+    return data;
+}
+
 #endif /* PROBLEM_JACOBIAN_H */

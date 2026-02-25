@@ -61,7 +61,7 @@ sparsediffengine = Extension(
         "-std=c99",
         "-Wall",
         not_on_windows("-Wextra"),
-        '-DDIFF_ENGINE_VERSION="0.1.0"',
+        '-DDIFF_ENGINE_VERSION="0.1.3"',
     ],
     extra_link_args=["-lm"] if platform.system().lower() != "windows" else [],
 )
