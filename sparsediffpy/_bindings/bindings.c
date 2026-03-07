@@ -11,6 +11,7 @@
 #include "atoms/const_vector_mult.h"
 #include "atoms/constant.h"
 #include "atoms/cos.h"
+#include "atoms/dense_left_matmul.h"
 #include "atoms/diag_vec.h"
 #include "atoms/entr.h"
 #include "atoms/exp.h"
@@ -111,8 +112,12 @@ static PyMethodDef DNLPMethods[] = {
     {"make_xexp", py_make_xexp, METH_VARARGS, "Create xexp node"},
     {"make_left_matmul", py_make_left_matmul, METH_VARARGS,
      "Create left matmul node (A @ f(x))"},
+    {"make_dense_left_matmul", py_make_dense_left_matmul, METH_VARARGS,
+     "Create dense left matmul node (A @ f(x)) where A is dense"},
     {"make_right_matmul", py_make_right_matmul, METH_VARARGS,
      "Create right matmul node (f(x) @ A)"},
+    {"make_dense_right_matmul", py_make_dense_right_matmul, METH_VARARGS,
+     "Create dense right matmul node (f(x) @ A) where A is dense"},
     {"make_quad_form", py_make_quad_form, METH_VARARGS,
      "Create quadratic form node (x' * Q * x)"},
     {"make_quad_over_lin", py_make_quad_over_lin, METH_VARARGS,
