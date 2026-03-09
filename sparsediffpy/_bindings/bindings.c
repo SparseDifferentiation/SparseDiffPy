@@ -11,7 +11,7 @@
 #include "atoms/const_vector_mult.h"
 #include "atoms/constant.h"
 #include "atoms/cos.h"
-#include "atoms/dense_left_matmul.h"
+#include "atoms/dense_matmul.h"
 #include "atoms/diag_vec.h"
 #include "atoms/entr.h"
 #include "atoms/exp.h"

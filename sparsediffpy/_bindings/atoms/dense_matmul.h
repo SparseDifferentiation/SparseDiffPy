@@ -1,5 +1,5 @@
-#ifndef ATOM_DENSE_LEFT_MATMUL_H
-#define ATOM_DENSE_LEFT_MATMUL_H
+#ifndef ATOM_DENSE_MATMUL_H
+#define ATOM_DENSE_MATMUL_H
 
 #include "bivariate.h"
 #include "common.h"
@@ -48,7 +48,7 @@ static PyObject *py_make_dense_left_matmul(PyObject *self, PyObject *args)
 
     double *A_data = (double *) PyArray_DATA(data_array);
 
-    expr *node = new_dense_left_matmul(child, A_data, m, n);
+    expr *node = new_left_matmul_dense(child, m, n, A_data);
     Py_DECREF(data_array);
 
     if (!node)
@@ -105,7 +105,7 @@ static PyObject *py_make_dense_right_matmul(PyObject *self, PyObject *args)
 
     double *A_data = (double *) PyArray_DATA(data_array);
 
-    expr *node = new_dense_right_matmul(child, A_data, m, n);
+    expr *node = new_right_matmul_dense(child, m, n, A_data);
     Py_DECREF(data_array);
 
     if (!node)
@@ -118,4 +118,4 @@ static PyObject *py_make_dense_right_matmul(PyObject *self, PyObject *args)
     return PyCapsule_New(node, EXPR_CAPSULE_NAME, expr_capsule_destructor);
 }
 
-#endif /* ATOM_DENSE_LEFT_MATMUL_H */
+#endif /* ATOM_DENSE_MATMUL_H */
