@@ -5,7 +5,7 @@
 #include "common.h"
 
 /* Right matrix multiplication: f(x) @ A where A is a constant matrix */
-static PyObject *py_make_right_matmul(PyObject *self, PyObject *args)
+static PyObject *py_make_sparse_right_matmul(PyObject *self, PyObject *args)
 {
     PyObject *child_capsule;
     PyObject *data_obj, *indices_obj, *indptr_obj;
