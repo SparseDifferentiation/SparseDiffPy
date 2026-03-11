@@ -52,7 +52,7 @@ if system == "darwin":
     blas_include_dirs = []
 elif system == "linux":
     blas_link_args = ["-lopenblas"]
-    blas_include_dirs = []
+    blas_include_dirs = ["/usr/include/openblas"]
 else:
     # Windows: OpenBLAS via vcpkg
     vcpkg_root = os.environ.get(
