@@ -16,14 +16,13 @@ limitations under the License.
 
 import builtins
 import glob
+import os
 import platform
 
 from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
 
-
-def not_on_windows(s: str) -> str:
-    return s if platform.system().lower() != "windows" else ""
+system = platform.system().lower()
 
 
 class build_ext_numpy(build_ext):
@@ -44,8 +43,24 @@ diff_engine_sources = [
 
 # Define _POSIX_C_SOURCE on Linux for clock_gettime and struct timespec
 defines = []
-if platform.system().lower() == "linux":
+if system == "linux":
     defines.append(("_POSIX_C_SOURCE", "200809L"))
+
+# Platform-specific BLAS configuration
+if system == "darwin":
+    blas_link_args = ["-framework", "Accelerate"]
+    blas_include_dirs = []
+elif system == "linux":
+    blas_link_args = ["-lopenblas"]
+    blas_include_dirs = []
+else:
+    # Windows: OpenBLAS via vcpkg
+    vcpkg_root = os.environ.get(
+        "VCPKG_INSTALLED_DIR",
+        r"C:\vcpkg\installed\x64-windows",
+    )
+    blas_link_args = [os.path.join(vcpkg_root, "lib", "openblas.lib")]
+    blas_include_dirs = [os.path.join(vcpkg_root, "include")]
 
 sparsediffengine = Extension(
     "sparsediffpy._sparsediffengine",
@@ -54,16 +69,15 @@ sparsediffengine = Extension(
         "SparseDiffEngine/include/",
         "SparseDiffEngine/src/",
         "sparsediffpy/_bindings/",
-    ],
+    ] + blas_include_dirs,
     define_macros=defines,
-    extra_compile_args=[
-        "-O3",
-        "-std=c99",
-        "-Wall",
-        not_on_windows("-Wextra"),
-        '-DDIFF_ENGINE_VERSION="0.1.3"',
-    ],
-    extra_link_args=["-lm"] if platform.system().lower() != "windows" else [],
+    extra_compile_args=(
+        ["-O3", "-std=c99", "-Wall", "-Wextra",
+         '-DDIFF_ENGINE_VERSION="0.1.3"']
+        if system != "windows" else
+        ['/O2', '/DDIFF_ENGINE_VERSION="0.1.3"']
+    ),
+    extra_link_args=(["-lm"] if system != "windows" else []) + blas_link_args,
 )
 
 setup(
