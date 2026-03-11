@@ -57,6 +57,13 @@ jobs:
         with:
           platforms: all
 
+      - name: Cache vcpkg packages
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: C:\vcpkg\installed
+          key: vcpkg-windows-openblas-v1
+
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.3.0
         env:
