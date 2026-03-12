@@ -65,6 +65,8 @@ jobs:
           CIBW_ARCHS_MACOS: "x86_64 universal2"
           CIBW_ARCHS_LINUX: "auto aarch64"
           CIBW_BEFORE_BUILD_LINUX: "yum install -y openblas-devel || apt-get install -y libopenblas-dev"
+          CIBW_BEFORE_BUILD_WINDOWS: "vcpkg install openblas:x64-windows"
+          CIBW_ENVIRONMENT_WINDOWS: "CMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
       - name: Check wheels
         shell: bash
         run: |

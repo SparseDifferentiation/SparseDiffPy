@@ -1,6 +1,6 @@
 [build-system]
-requires = ["numpy >= 2.0.0", "setuptools >= 68.1.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["scikit-build-core >= 0.10", "numpy >= 2.0.0"]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "sparsediffpy"
@@ -14,8 +14,6 @@ license = "Apache-2.0"
 file = "README.md"
 content-type = "text/markdown"
 
-[tool.setuptools]
-include-package-data = false
-
-[tool.setuptools.packages.find]
-include = ["sparsediffpy*"]
+[tool.scikit-build]
+cmake.minimum-version = "3.15"
+wheel.packages = ["sparsediffpy"]
