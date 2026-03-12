@@ -36,9 +36,13 @@ class build_ext_numpy(build_ext):
 
 
 # Collect all C source files from SparseDiffEngine
+_exclude = {"dnlp_diff_engine"}
+if system == "windows":
+    _exclude.add("dense_matrix")
+
 diff_engine_sources = [
     s for s in glob.glob("SparseDiffEngine/src/**/*.c", recursive=True)
-    if "dnlp_diff_engine" not in s
+    if not any(ex in s for ex in _exclude)
 ] + ["sparsediffpy/_bindings/bindings.c"]
 
 # Define _POSIX_C_SOURCE on Linux for clock_gettime and struct timespec
@@ -54,16 +58,9 @@ elif system == "linux":
     blas_link_args = ["-lopenblas"]
     blas_include_dirs = ["/usr/include/openblas"]
 else:
-    # Windows: OpenBLAS via vcpkg
-    vcpkg_root = os.environ.get(
-        "VCPKG_INSTALLED_DIR",
-        r"C:\vcpkg\installed\x64-windows",
-    )
-    blas_link_args = [os.path.join(vcpkg_root, "lib", "openblas.lib")]
-    blas_include_dirs = [
-        os.path.join(vcpkg_root, "include"),
-        os.path.join(vcpkg_root, "include", "openblas"),
-    ]
+    # Windows: no BLAS available
+    blas_link_args = []
+    blas_include_dirs = []
 
 sparsediffengine = Extension(
     "sparsediffpy._sparsediffengine",
