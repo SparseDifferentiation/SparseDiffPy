@@ -60,7 +60,10 @@ else:
         r"C:\vcpkg\installed\x64-windows",
     )
     blas_link_args = [os.path.join(vcpkg_root, "lib", "openblas.lib")]
-    blas_include_dirs = [os.path.join(vcpkg_root, "include")]
+    blas_include_dirs = [
+        os.path.join(vcpkg_root, "include"),
+        os.path.join(vcpkg_root, "include", "openblas"),
+    ]
 
 sparsediffengine = Extension(
     "sparsediffpy._sparsediffengine",
