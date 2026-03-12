@@ -45,6 +45,9 @@ diff_engine_sources = [
     if not any(ex in s for ex in _exclude)
 ] + ["sparsediffpy/_bindings/bindings.c"]
 
+if system == "windows":
+    diff_engine_sources.append("sparsediffpy/_bindings/dense_matrix_stub.c")
+
 # Define _POSIX_C_SOURCE on Linux for clock_gettime and struct timespec
 defines = []
 if system == "linux":
