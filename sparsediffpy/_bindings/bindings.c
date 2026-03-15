@@ -25,6 +25,7 @@
 #include "atoms/matmul.h"
 #include "atoms/multiply.h"
 #include "atoms/neg.h"
+#include "atoms/normal_cdf.h"
 #include "atoms/power.h"
 #include "atoms/prod.h"
 #include "atoms/prod_axis_one.h"
@@ -83,6 +84,7 @@ static PyMethodDef DNLPMethods[] = {
      "e2, ...], n_vars))"},
     {"make_sum", py_make_sum, METH_VARARGS, "Create sum node"},
     {"make_neg", py_make_neg, METH_VARARGS, "Create neg node"},
+    {"make_normal_cdf", py_make_normal_cdf, METH_VARARGS, "Create normal_cdf node"},
     {"make_promote", py_make_promote, METH_VARARGS, "Create promote node"},
     {"make_multiply", py_make_multiply, METH_VARARGS,
      "Create elementwise multiply node"},
