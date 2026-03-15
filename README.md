@@ -5,9 +5,7 @@ Python bindings for [SparseDiffEngine](https://github.com/SparseDifferentiation/
 ## Installation
 
 ```bash
-git clone --recurse-submodules https://github.com/SparseDifferentiation/SparseDiffPy.git
-cd SparseDiffPy
-pip install -e .
+pip install sparsediffpy
 ```
 
 ## Usage
