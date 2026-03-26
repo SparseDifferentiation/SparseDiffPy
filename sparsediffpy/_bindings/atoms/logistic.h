@@ -2,7 +2,7 @@
 #define ATOM_LOGISTIC_H
 
 #include "common.h"
-#include "elementwise_univariate.h"
+#include "elementwise_full_dom.h"
 
 static PyObject *py_make_logistic(PyObject *self, PyObject *args)
 {
