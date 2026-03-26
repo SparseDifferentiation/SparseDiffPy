@@ -12,12 +12,14 @@
 #include "atoms/constant.h"
 #include "atoms/cos.h"
 #include "atoms/dense_matmul.h"
+#include "atoms/diag_mat.h"
 #include "atoms/diag_vec.h"
 #include "atoms/entr.h"
 #include "atoms/exp.h"
 #include "atoms/getters.h"
 #include "atoms/hstack.h"
 #include "atoms/index.h"
+#include "atoms/kron_left.h"
 #include "atoms/left_matmul.h"
 #include "atoms/linear.h"
 #include "atoms/log.h"
@@ -45,7 +47,9 @@
 #include "atoms/tanh.h"
 #include "atoms/trace.h"
 #include "atoms/transpose.h"
+#include "atoms/upper_tri.h"
 #include "atoms/variable.h"
+#include "atoms/vstack.h"
 #include "atoms/xexp.h"
 
 /* Include problem bindings */
@@ -82,6 +86,8 @@ static PyMethodDef DNLPMethods[] = {
     {"make_hstack", py_make_hstack, METH_VARARGS,
      "Create hstack node from list of expr capsules and n_vars (make_hstack([e1, "
      "e2, ...], n_vars))"},
+    {"make_vstack", py_make_vstack, METH_VARARGS,
+     "Create vstack node from list of expr capsules (make_vstack([e1, e2, ...]))"},
     {"make_sum", py_make_sum, METH_VARARGS, "Create sum node"},
     {"make_neg", py_make_neg, METH_VARARGS, "Create neg node"},
     {"make_normal_cdf", py_make_normal_cdf, METH_VARARGS, "Create normal_cdf node"},
@@ -102,16 +108,20 @@ static PyMethodDef DNLPMethods[] = {
      "Create prod_axis_one node"},
     {"make_sin", py_make_sin, METH_VARARGS, "Create sin node"},
     {"make_cos", py_make_cos, METH_VARARGS, "Create cos node"},
+    {"make_diag_mat", py_make_diag_mat, METH_VARARGS, "Create diag_mat node"},
     {"make_diag_vec", py_make_diag_vec, METH_VARARGS, "Create diag_vec node"},
     {"make_tan", py_make_tan, METH_VARARGS, "Create tan node"},
     {"make_sinh", py_make_sinh, METH_VARARGS, "Create sinh node"},
     {"make_tanh", py_make_tanh, METH_VARARGS, "Create tanh node"},
     {"make_asinh", py_make_asinh, METH_VARARGS, "Create asinh node"},
     {"make_atanh", py_make_atanh, METH_VARARGS, "Create atanh node"},
+    {"make_upper_tri", py_make_upper_tri, METH_VARARGS, "Create upper_tri node"},
     {"make_broadcast", py_make_broadcast, METH_VARARGS, "Create broadcast node"},
     {"make_entr", py_make_entr, METH_VARARGS, "Create entr node"},
     {"make_logistic", py_make_logistic, METH_VARARGS, "Create logistic node"},
     {"make_xexp", py_make_xexp, METH_VARARGS, "Create xexp node"},
+    {"make_kron_left", py_make_kron_left, METH_VARARGS,
+     "Create kron(C, X) node where C is constant sparse matrix"},
     {"make_sparse_left_matmul", py_make_sparse_left_matmul, METH_VARARGS,
      "Create sparse left matmul node (A @ f(x))"},
     {"make_dense_left_matmul", py_make_dense_left_matmul, METH_VARARGS,
