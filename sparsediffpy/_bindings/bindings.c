@@ -46,6 +46,7 @@
 #include "atoms/trace.h"
 #include "atoms/transpose.h"
 #include "atoms/variable.h"
+#include "atoms/vstack.h"
 #include "atoms/xexp.h"
 
 /* Include problem bindings */
@@ -82,6 +83,9 @@ static PyMethodDef DNLPMethods[] = {
     {"make_hstack", py_make_hstack, METH_VARARGS,
      "Create hstack node from list of expr capsules and n_vars (make_hstack([e1, "
      "e2, ...], n_vars))"},
+    {"make_vstack", py_make_vstack, METH_VARARGS,
+     "Create vstack node from list of expr capsules (make_vstack([e1, e2, "
+     "...]))"},
     {"make_sum", py_make_sum, METH_VARARGS, "Create sum node"},
     {"make_neg", py_make_neg, METH_VARARGS, "Create neg node"},
     {"make_normal_cdf", py_make_normal_cdf, METH_VARARGS, "Create normal_cdf node"},
