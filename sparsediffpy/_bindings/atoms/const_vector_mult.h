@@ -42,12 +42,22 @@ static PyObject *py_make_const_vector_mult(PyObject *self, PyObject *args)
 
     double *a_data = (double *) PyArray_DATA(a_array);
 
-    expr *node = new_const_vector_mult(a_data, child);
+    expr *a_node =
+        new_parameter(a_size, 1, PARAM_FIXED, child->n_vars, a_data);
 
     Py_DECREF(a_array);
 
+    if (!a_node)
+    {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "failed to create parameter node for vector");
+        return NULL;
+    }
+
+    expr *node = new_vector_mult(a_node, child);
     if (!node)
     {
+        free_expr(a_node);
         PyErr_SetString(PyExc_RuntimeError,
                         "failed to create const_vector_mult node");
         return NULL;

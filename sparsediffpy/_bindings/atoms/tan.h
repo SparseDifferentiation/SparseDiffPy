@@ -2,7 +2,7 @@
 #define ATOM_TAN_H
 
 #include "common.h"
-#include "elementwise_univariate.h"
+#include "elementwise_restricted_dom.h"
 
 static PyObject *py_make_tan(PyObject *self, PyObject *args)
 {

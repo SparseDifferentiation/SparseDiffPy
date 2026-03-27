@@ -19,8 +19,8 @@ static PyObject *py_make_constant(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    expr *node =
-        new_constant(d1, d2, n_vars, (const double *) PyArray_DATA(values_array));
+    expr *node = new_parameter(d1, d2, PARAM_FIXED, n_vars,
+                               (const double *) PyArray_DATA(values_array));
     Py_DECREF(values_array);
 
     if (!node)

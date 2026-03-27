@@ -25,6 +25,7 @@
 #include "atoms/matmul.h"
 #include "atoms/multiply.h"
 #include "atoms/neg.h"
+#include "atoms/parameter.h"
 #include "atoms/normal_cdf.h"
 #include "atoms/power.h"
 #include "atoms/prod.h"
@@ -38,6 +39,7 @@
 #include "atoms/rel_entr_vector_scalar.h"
 #include "atoms/reshape.h"
 #include "atoms/right_matmul.h"
+#include "atoms/scalar_mult.h"
 #include "atoms/sin.h"
 #include "atoms/sinh.h"
 #include "atoms/sum.h"
@@ -46,6 +48,7 @@
 #include "atoms/trace.h"
 #include "atoms/transpose.h"
 #include "atoms/variable.h"
+#include "atoms/vector_mult.h"
 #include "atoms/xexp.h"
 
 /* Include problem bindings */
@@ -58,6 +61,8 @@
 #include "problem/jacobian.h"
 #include "problem/make_problem.h"
 #include "problem/objective_forward.h"
+#include "problem/register_params.h"
+#include "problem/update_params.h"
 
 static int numpy_initialized = 0;
 
@@ -71,6 +76,8 @@ static int ensure_numpy(void)
 
 static PyMethodDef DNLPMethods[] = {
     {"make_variable", py_make_variable, METH_VARARGS, "Create variable node"},
+    {"make_parameter", py_make_parameter, METH_VARARGS,
+     "Create updatable parameter node"},
     {"make_constant", py_make_constant, METH_VARARGS, "Create constant node"},
     {"make_linear", py_make_linear, METH_VARARGS, "Create linear op node"},
     {"make_log", py_make_log, METH_VARARGS, "Create log node"},
@@ -94,6 +101,10 @@ static PyMethodDef DNLPMethods[] = {
      "Create constant scalar multiplication node (a * f(x))"},
     {"make_const_vector_mult", py_make_const_vector_mult, METH_VARARGS,
      "Create constant vector multiplication node (a ∘ f(x))"},
+    {"make_param_scalar_mult", py_make_param_scalar_mult, METH_VARARGS,
+     "Create parameter scalar multiplication node (a * f(x))"},
+    {"make_param_vector_mult", py_make_param_vector_mult, METH_VARARGS,
+     "Create parameter vector elementwise multiplication node (a ∘ f(x))"},
     {"make_power", py_make_power, METH_VARARGS, "Create power node"},
     {"make_prod", py_make_prod, METH_VARARGS, "Create prod node"},
     {"make_prod_axis_zero", py_make_prod_axis_zero, METH_VARARGS,
@@ -170,6 +181,10 @@ static PyMethodDef DNLPMethods[] = {
      "Get Hessian sparsity in COO format (lower triangular)"},
     {"problem_eval_hessian_vals_coo", py_problem_eval_hessian_vals_coo, METH_VARARGS,
      "Evaluate Hessian and return COO values array"},
+    {"problem_register_params", py_problem_register_params, METH_VARARGS,
+     "Register parameter nodes with a problem"},
+    {"problem_update_params", py_problem_update_params, METH_VARARGS,
+     "Update parameter values from theta array"},
     {NULL, NULL, 0, NULL}};
 
 static struct PyModuleDef sparsediffpy_module = {

@@ -22,9 +22,18 @@ static PyObject *py_make_const_scalar_mult(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    expr *node = new_const_scalar_mult(a, child);
+    expr *a_node = new_parameter(1, 1, PARAM_FIXED, child->n_vars, &a);
+    if (!a_node)
+    {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "failed to create parameter node for scalar");
+        return NULL;
+    }
+
+    expr *node = new_scalar_mult(a_node, child);
     if (!node)
     {
+        free_expr(a_node);
         PyErr_SetString(PyExc_RuntimeError,
                         "failed to create const_scalar_mult node");
         return NULL;
