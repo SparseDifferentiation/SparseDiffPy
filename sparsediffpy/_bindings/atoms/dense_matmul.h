@@ -7,17 +7,20 @@
 /* Dense left matrix multiplication: A @ f(x) where A is a dense matrix.
  *
  * Python signature:
- *   make_dense_left_matmul(child, A_data_flat, m, n)
+ *   make_dense_left_matmul(param_or_none, child, A_data_flat, m, n)
  *
+ * - param_or_none: None for constant matrix, or a parameter capsule.
  * - child: the child expression capsule f(x).
  * - A_data_flat: contiguous row-major numpy float64 array of size m*n.
  * - m, n: dimensions of matrix A. */
 static PyObject *py_make_dense_left_matmul(PyObject *self, PyObject *args)
 {
+    PyObject *param_obj;
     PyObject *child_capsule;
     PyObject *data_obj;
     int m, n;
-    if (!PyArg_ParseTuple(args, "OOii", &child_capsule, &data_obj, &m, &n))
+    if (!PyArg_ParseTuple(args, "OOOii", &param_obj, &child_capsule,
+                          &data_obj, &m, &n))
     {
         return NULL;
     }
@@ -38,11 +41,38 @@ static PyObject *py_make_dense_left_matmul(PyObject *self, PyObject *args)
 
     double *A_data = (double *) PyArray_DATA(data_array);
 
-    expr *node = new_left_matmul_dense(child, m, n, A_data);
+    /* Build the parameter node: use provided capsule or create PARAM_FIXED */
+    expr *param_node = NULL;
+    if (param_obj == Py_None)
+    {
+        param_node =
+            new_parameter(m * n, 1, PARAM_FIXED, child->n_vars, A_data);
+        if (!param_node)
+        {
+            Py_DECREF(data_array);
+            PyErr_SetString(PyExc_RuntimeError,
+                            "failed to create parameter node for dense matrix");
+            return NULL;
+        }
+    }
+    else
+    {
+        param_node =
+            (expr *) PyCapsule_GetPointer(param_obj, EXPR_CAPSULE_NAME);
+        if (!param_node)
+        {
+            Py_DECREF(data_array);
+            PyErr_SetString(PyExc_ValueError, "invalid parameter capsule");
+            return NULL;
+        }
+    }
+
+    expr *node = new_left_matmul_dense(param_node, child, m, n, A_data);
     Py_DECREF(data_array);
 
     if (!node)
     {
+        if (param_obj == Py_None) free_expr(param_node);
         PyErr_SetString(PyExc_RuntimeError,
                         "failed to create dense_left_matmul node");
         return NULL;
@@ -54,17 +84,20 @@ static PyObject *py_make_dense_left_matmul(PyObject *self, PyObject *args)
 /* Dense right matrix multiplication: f(x) @ A where A is a dense matrix.
  *
  * Python signature:
- *   make_dense_right_matmul(child, A_data_flat, m, n)
+ *   make_dense_right_matmul(param_or_none, child, A_data_flat, m, n)
  *
+ * - param_or_none: None for constant matrix, or a parameter capsule.
  * - child: the child expression capsule f(x).
  * - A_data_flat: contiguous row-major numpy float64 array of size m*n.
  * - m, n: dimensions of matrix A. */
 static PyObject *py_make_dense_right_matmul(PyObject *self, PyObject *args)
 {
+    PyObject *param_obj;
     PyObject *child_capsule;
     PyObject *data_obj;
     int m, n;
-    if (!PyArg_ParseTuple(args, "OOii", &child_capsule, &data_obj, &m, &n))
+    if (!PyArg_ParseTuple(args, "OOOii", &param_obj, &child_capsule,
+                          &data_obj, &m, &n))
     {
         return NULL;
     }
@@ -85,11 +118,38 @@ static PyObject *py_make_dense_right_matmul(PyObject *self, PyObject *args)
 
     double *A_data = (double *) PyArray_DATA(data_array);
 
-    expr *node = new_right_matmul_dense(child, m, n, A_data);
+    /* Build the parameter node: use provided capsule or create PARAM_FIXED */
+    expr *param_node = NULL;
+    if (param_obj == Py_None)
+    {
+        param_node =
+            new_parameter(m * n, 1, PARAM_FIXED, child->n_vars, A_data);
+        if (!param_node)
+        {
+            Py_DECREF(data_array);
+            PyErr_SetString(PyExc_RuntimeError,
+                            "failed to create parameter node for dense matrix");
+            return NULL;
+        }
+    }
+    else
+    {
+        param_node =
+            (expr *) PyCapsule_GetPointer(param_obj, EXPR_CAPSULE_NAME);
+        if (!param_node)
+        {
+            Py_DECREF(data_array);
+            PyErr_SetString(PyExc_ValueError, "invalid parameter capsule");
+            return NULL;
+        }
+    }
+
+    expr *node = new_right_matmul_dense(param_node, child, m, n, A_data);
     Py_DECREF(data_array);
 
     if (!node)
     {
+        if (param_obj == Py_None) free_expr(param_node);
         PyErr_SetString(PyExc_RuntimeError,
                         "failed to create dense_right_matmul node");
         return NULL;
