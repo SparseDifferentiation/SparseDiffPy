@@ -6,7 +6,11 @@
 #include "bivariate.h"
 #include "common.h"
 
-/* rel_entr: rel_entr(x, y) = x * log(x/y) elementwise */
+/* rel_entr: rel_entr(x, y) = x * log(x/y) elementwise.
+ * Auto-dispatches based on argument sizes:
+ *   - scalar x, vector y  -> new_rel_entr_first_arg_scalar
+ *   - vector x, scalar y  -> new_rel_entr_second_arg_scalar
+ *   - otherwise            -> new_rel_entr_vector_args */
 static PyObject *py_make_rel_entr(PyObject *self, PyObject *args)
 {
     (void) self;
@@ -16,14 +20,28 @@ static PyObject *py_make_rel_entr(PyObject *self, PyObject *args)
         return NULL;
     }
     expr *left = (expr *) PyCapsule_GetPointer(left_capsule, EXPR_CAPSULE_NAME);
-    expr *right = (expr *) PyCapsule_GetPointer(right_capsule, EXPR_CAPSULE_NAME);
+    expr *right =
+        (expr *) PyCapsule_GetPointer(right_capsule, EXPR_CAPSULE_NAME);
     if (!left || !right)
     {
         PyErr_SetString(PyExc_ValueError, "invalid child capsule");
         return NULL;
     }
 
-    expr *node = new_rel_entr_vector_args(left, right);
+    expr *node;
+    if (left->size == 1 && right->size > 1)
+    {
+        node = new_rel_entr_first_arg_scalar(left, right);
+    }
+    else if (left->size > 1 && right->size == 1)
+    {
+        node = new_rel_entr_second_arg_scalar(left, right);
+    }
+    else
+    {
+        node = new_rel_entr_vector_args(left, right);
+    }
+
     if (!node)
     {
         PyErr_SetString(PyExc_RuntimeError, "failed to create rel_entr node");
