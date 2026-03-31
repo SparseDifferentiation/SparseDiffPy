@@ -3,7 +3,7 @@
 #ifndef ATOM_REL_ENTR_H
 #define ATOM_REL_ENTR_H
 
-#include "bivariate.h"
+#include "bivariate_restricted_dom.h"
 #include "common.h"
 
 /* rel_entr: rel_entr(x, y) = x * log(x/y) elementwise */

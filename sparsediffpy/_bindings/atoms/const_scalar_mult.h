@@ -1,7 +1,7 @@
 #ifndef ATOM_CONST_SCALAR_MULT_H
 #define ATOM_CONST_SCALAR_MULT_H
 
-#include "bivariate.h"
+#include "bivariate_full_dom.h"
 #include "common.h"
 
 /* Constant scalar multiplication: a * f(x) where a is a constant double */

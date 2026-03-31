@@ -2,7 +2,7 @@
 #define ATOM_COS_H
 
 #include "common.h"
-#include "elementwise_univariate.h"
+#include "elementwise_full_dom.h"
 
 static PyObject *py_make_cos(PyObject *self, PyObject *args)
 {

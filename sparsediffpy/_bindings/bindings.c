@@ -19,7 +19,6 @@
 #include "atoms/hstack.h"
 #include "atoms/index.h"
 #include "atoms/left_matmul.h"
-#include "atoms/linear.h"
 #include "atoms/log.h"
 #include "atoms/logistic.h"
 #include "atoms/matmul.h"
@@ -72,7 +71,6 @@ static int ensure_numpy(void)
 static PyMethodDef DNLPMethods[] = {
     {"make_variable", py_make_variable, METH_VARARGS, "Create variable node"},
     {"make_constant", py_make_constant, METH_VARARGS, "Create constant node"},
-    {"make_linear", py_make_linear, METH_VARARGS, "Create linear op node"},
     {"make_log", py_make_log, METH_VARARGS, "Create log node"},
     {"make_exp", py_make_exp, METH_VARARGS, "Create exp node"},
     {"make_index", py_make_index, METH_VARARGS, "Create index node"},
