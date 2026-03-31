@@ -3,7 +3,7 @@
 #ifndef ATOM_REL_ENTR_VECTOR_SCALAR_H
 #define ATOM_REL_ENTR_VECTOR_SCALAR_H
 
-#include "bivariate.h"
+#include "bivariate_restricted_dom.h"
 #include "common.h"
 
 /* rel_entr_vector_scalar: rel_entr(x, y) where x is vector, y is scalar */

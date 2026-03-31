@@ -1,7 +1,7 @@
 #ifndef ATOM_CONST_VECTOR_MULT_H
 #define ATOM_CONST_VECTOR_MULT_H
 
-#include "bivariate.h"
+#include "bivariate_full_dom.h"
 #include "common.h"
 
 /* Constant vector elementwise multiplication: a ∘ f(x) where a is a constant vector

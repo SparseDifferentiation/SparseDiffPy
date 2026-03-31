@@ -1,7 +1,7 @@
 #ifndef ATOM_LEFT_MATMUL_H
 #define ATOM_LEFT_MATMUL_H
 
-#include "bivariate.h"
+#include "bivariate_full_dom.h"
 #include "common.h"
 
 /* Left matrix multiplication: A @ f(x) where A is a constant matrix */

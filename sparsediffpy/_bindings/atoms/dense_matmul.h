@@ -1,7 +1,7 @@
 #ifndef ATOM_DENSE_MATMUL_H
 #define ATOM_DENSE_MATMUL_H
 
-#include "bivariate.h"
+#include "bivariate_full_dom.h"
 #include "common.h"
 
 /* Dense left matrix multiplication: A @ f(x) where A is a dense matrix.

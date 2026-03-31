@@ -2,7 +2,7 @@
 #define ATOM_PROD_AXIS_ONE_H
 
 #include "common.h"
-#include "other.h"
+#include "non_elementwise_full_dom.h"
 
 static PyObject *py_make_prod_axis_one(PyObject *self, PyObject *args)
 {

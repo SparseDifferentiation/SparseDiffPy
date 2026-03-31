@@ -1,7 +1,7 @@
 #ifndef ATOM_RIGHT_MATMUL_H
 #define ATOM_RIGHT_MATMUL_H
 
-#include "bivariate.h"
+#include "bivariate_full_dom.h"
 #include "common.h"
 
 /* Right matrix multiplication: f(x) @ A where A is a constant matrix */
