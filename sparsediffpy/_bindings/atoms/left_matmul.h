@@ -76,24 +76,11 @@ static PyObject *py_make_left_matmul(PyObject *self, PyObject *args)
 
         int nnz = (int) PyArray_SIZE(data_array);
 
+        /* For sparse matrices, we don't create a PARAM_FIXED node when
+           param_obj is None — the CSR data is already copied into the
+           matrix struct.  Only extract a real parameter capsule. */
         expr *param_node = NULL;
-        if (param_obj == Py_None)
-        {
-            param_node = new_parameter(
-                nnz, 1, PARAM_FIXED, child->n_vars,
-                (const double *) PyArray_DATA(data_array));
-            if (!param_node)
-            {
-                Py_DECREF(data_array);
-                Py_DECREF(indices_array);
-                Py_DECREF(indptr_array);
-                PyErr_SetString(
-                    PyExc_RuntimeError,
-                    "failed to create parameter node for matrix");
-                return NULL;
-            }
-        }
-        else
+        if (param_obj != Py_None)
         {
             param_node = (expr *) PyCapsule_GetPointer(param_obj,
                                                        EXPR_CAPSULE_NAME);
@@ -122,7 +109,6 @@ static PyObject *py_make_left_matmul(PyObject *self, PyObject *args)
 
         if (!node)
         {
-            if (param_obj == Py_None) free_expr(param_node);
             PyErr_SetString(PyExc_RuntimeError,
                             "failed to create left_matmul node");
             return NULL;
