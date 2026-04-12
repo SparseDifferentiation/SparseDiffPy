@@ -2,7 +2,7 @@
 #define ATOM_TANH_H
 
 #include "common.h"
-#include "elementwise_univariate.h"
+#include "elementwise_full_dom.h"
 
 static PyObject *py_make_tanh(PyObject *self, PyObject *args)
 {

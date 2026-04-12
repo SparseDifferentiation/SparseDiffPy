@@ -3,7 +3,7 @@
 #define ATOM_PROD_AXIS_ZERO_H
 
 #include "common.h"
-#include "other.h"
+#include "non_elementwise_full_dom.h"
 
 static PyObject *py_make_prod_axis_zero(PyObject *self, PyObject *args)
 {

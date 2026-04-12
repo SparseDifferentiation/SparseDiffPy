@@ -2,7 +2,7 @@
 #define ATOM_QUAD_FORM_H
 
 #include "common.h"
-#include "other.h"
+#include "non_elementwise_full_dom.h"
 
 /* Quadratic form: y = x' * Q * x where Q is a constant matrix */
 static PyObject *py_make_quad_form(PyObject *self, PyObject *args)

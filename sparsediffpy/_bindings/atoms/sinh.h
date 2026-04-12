@@ -2,7 +2,7 @@
 #define ATOM_SINH_H
 
 #include "common.h"
-#include "elementwise_univariate.h"
+#include "elementwise_full_dom.h"
 
 static PyObject *py_make_sinh(PyObject *self, PyObject *args)
 {

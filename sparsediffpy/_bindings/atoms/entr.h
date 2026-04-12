@@ -2,7 +2,7 @@
 #define ATOM_ENTR_H
 
 #include "common.h"
-#include "elementwise_univariate.h"
+#include "elementwise_restricted_dom.h"
 
 static PyObject *py_make_entr(PyObject *self, PyObject *args)
 {

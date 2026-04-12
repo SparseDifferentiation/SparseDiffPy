@@ -3,7 +3,7 @@
 #ifndef ATOM_QUAD_OVER_LIN_H
 #define ATOM_QUAD_OVER_LIN_H
 
-#include "bivariate.h"
+#include "bivariate_restricted_dom.h"
 #include "common.h"
 
 /* quad_over_lin: y = sum(x^2) / z where x is left, z is right (scalar) */
