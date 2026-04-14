@@ -1,22 +1,60 @@
-"""Expression base class, operator overloading, and dispatch helpers.
+"""Expression base class, operator overloading, dispatch helpers, and _wrap_constant.
 
 Node types are defined in _nodes_affine.py, _nodes_elementwise.py,
 _nodes_bivariate.py, and _nodes_other.py.
 """
 
 import numpy as np
+import scipy.sparse
 
-from sparsediffpy._core._constants import (
-    Constant,
-    SparseConstant,
-    _wrap_constant,
-)
+from sparsediffpy._core._constants import Constant, SparseConstant
 from sparsediffpy._core._shapes import (
     broadcast_shape,
     check_matmul_shapes,
     is_scalar,
 )
 
+
+# ---------------------------------------------------------------------------
+# _wrap_constant: converts raw values into expression nodes
+# ---------------------------------------------------------------------------
+
+def _wrap_constant(value):
+    """Wrap a raw Python/NumPy/SciPy value into an expression node.
+
+    Called by operators and node constructors so users can write
+    ``x + 1.0`` or ``A @ x`` with raw scalars/arrays.
+
+    - Expression subclass -> return as-is
+    - int / float -> Constant with shape (1, 1)
+    - np.ndarray 1D (n,) -> Constant with shape (n, 1) (column vector)
+    - np.ndarray 2D (m, n) -> Constant with shape (m, n)
+    - scipy.sparse -> SparseConstant
+    """
+    if hasattr(value, "_is_sparsediff_expr"):
+        return value
+
+    if isinstance(value, (int, float)):
+        return Constant(np.array([float(value)]), (1, 1))
+
+    if isinstance(value, np.ndarray):
+        if value.ndim == 0:
+            return Constant(np.array([value.item()]), (1, 1))
+        if value.ndim == 1:
+            return Constant(value, (value.shape[0], 1))
+        if value.ndim == 2:
+            return Constant(value, (value.shape[0], value.shape[1]))
+        raise ValueError(f"Cannot wrap {value.ndim}D array as constant")
+
+    if scipy.sparse.issparse(value):
+        return SparseConstant(value)
+
+    raise TypeError(f"Cannot convert {type(value).__name__} to expression")
+
+
+# ---------------------------------------------------------------------------
+# Base class
+# ---------------------------------------------------------------------------
 
 class Expression:
     """Base class for all expression tree nodes."""

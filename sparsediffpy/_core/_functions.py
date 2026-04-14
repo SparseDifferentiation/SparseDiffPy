@@ -1,9 +1,15 @@
-"""Module-level named functions: sp.sin, sp.exp, sp.hstack, etc."""
+"""Module-level named functions: sp.sin, sp.exp, sp.hstack, etc.
+
+Unary functions rely on _UnaryOp.__init__ to call _wrap_constant on the
+child, so they don't need to wrap explicitly. Multi-argument functions
+and structural ops that do shape validation before constructing nodes
+still wrap explicitly.
+"""
 
 import numpy as np
 import scipy.sparse
 
-from sparsediffpy._core._constants import _wrap_constant
+from sparsediffpy._core._expression import _wrap_constant
 from sparsediffpy._core._nodes_affine import (
     DiagVec, HStack, Reshape, Sum, Trace, Transpose,
 )
@@ -16,57 +22,52 @@ from sparsediffpy._core._nodes_other import Prod, ProdAxisOne, ProdAxisZero, Qua
 from sparsediffpy._core._shapes import validate_shape
 
 
-def _ensure_expr(x):
-    if hasattr(x, "_is_sparsediff_expr"):
-        return x
-    return _wrap_constant(x)
-
-
 # ---------------------------------------------------------------------------
 # Unary elementwise functions
+# (_UnaryOp.__init__ handles _wrap_constant)
 # ---------------------------------------------------------------------------
 
 def sin(x):
-    return Sin(_ensure_expr(x))
+    return Sin(x)
 
 def cos(x):
-    return Cos(_ensure_expr(x))
+    return Cos(x)
 
 def exp(x):
-    return Exp(_ensure_expr(x))
+    return Exp(x)
 
 def log(x):
-    return Log(_ensure_expr(x))
+    return Log(x)
 
 def tan(x):
-    return Tan(_ensure_expr(x))
+    return Tan(x)
 
 def sinh(x):
-    return Sinh(_ensure_expr(x))
+    return Sinh(x)
 
 def tanh(x):
-    return Tanh(_ensure_expr(x))
+    return Tanh(x)
 
 def asinh(x):
-    return Asinh(_ensure_expr(x))
+    return Asinh(x)
 
 def atanh(x):
-    return Atanh(_ensure_expr(x))
+    return Atanh(x)
 
 def logistic(x):
-    return Logistic(_ensure_expr(x))
+    return Logistic(x)
 
 def normal_cdf(x):
-    return NormalCdf(_ensure_expr(x))
+    return NormalCdf(x)
 
 def entr(x):
-    return Entr(_ensure_expr(x))
+    return Entr(x)
 
 def xexp(x):
-    return Xexp(_ensure_expr(x))
+    return Xexp(x)
 
 def diag_vec(x):
-    return DiagVec(_ensure_expr(x))
+    return DiagVec(x)
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +75,7 @@ def diag_vec(x):
 # ---------------------------------------------------------------------------
 
 def power(x, p):
-    return Power(_ensure_expr(x), float(p))
+    return Power(x, float(p))
 
 
 def sum(x, axis=None):
@@ -85,7 +86,7 @@ def sum(x, axis=None):
     axis=1: sum along columns (collapse d2) -> (d1, 1)
     """
     c_axis = -1 if axis is None else axis
-    return Sum(_ensure_expr(x), c_axis)
+    return Sum(x, c_axis)
 
 
 def prod(x, axis=None):
@@ -95,7 +96,6 @@ def prod(x, axis=None):
     axis=0: product along rows -> (1, d2)
     axis=1: product along columns -> (d1, 1)
     """
-    x = _ensure_expr(x)
     if axis is None:
         return Prod(x)
     elif axis == 0:
@@ -108,11 +108,11 @@ def prod(x, axis=None):
 
 def reshape(x, d1, d2):
     validate_shape(d1, d2)
-    return Reshape(_ensure_expr(x), (d1, d2))
+    return Reshape(x, (d1, d2))
 
 
 def trace(x):
-    return Trace(_ensure_expr(x))
+    return Trace(x)
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ def hstack(expressions):
 
     Result shape: (d1, sum of all d2).
     """
-    exprs = [_ensure_expr(e) for e in expressions]
+    exprs = [_wrap_constant(e) for e in expressions]
     if not exprs:
         raise ValueError("hstack requires at least one expression")
 
@@ -145,7 +145,7 @@ def vstack(expressions):
 
     Implemented as transpose(hstack(transpose(each))).
     """
-    exprs = [_ensure_expr(e) for e in expressions]
+    exprs = [_wrap_constant(e) for e in expressions]
     if not exprs:
         raise ValueError("vstack requires at least one expression")
 
@@ -178,7 +178,7 @@ def quad_form(x, Q):
     x must be a column vector (n, 1).
     Q must be a scipy.sparse matrix or np.ndarray of shape (n, n).
     """
-    x = _ensure_expr(x)
+    x = _wrap_constant(x)
     if x.shape[1] != 1:
         raise ValueError(f"quad_form: x must be a column vector, got shape {x.shape}")
 
@@ -204,13 +204,13 @@ def quad_form(x, Q):
 
 def quad_over_lin(x, z):
     """sum(x^2) / z where z is a scalar expression."""
-    x = _ensure_expr(x)
-    z = _ensure_expr(z)
+    x = _wrap_constant(x)
+    z = _wrap_constant(z)
     return QuadOverLin(x, z)
 
 
 def rel_entr(x, y):
     """x * log(x / y) elementwise."""
-    x = _ensure_expr(x)
-    y = _ensure_expr(y)
+    x = _wrap_constant(x)
+    y = _wrap_constant(y)
     return RelEntr(x, y)

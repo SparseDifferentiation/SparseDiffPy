@@ -1,4 +1,4 @@
-"""Constant and SparseConstant expression nodes, plus _wrap_constant."""
+"""Constant and SparseConstant expression nodes."""
 
 import numpy as np
 import scipy.sparse
@@ -47,35 +47,3 @@ class SparseConstant:
             shape=self.shape,
         ).toarray()
         return dense.ravel(order="F").astype(np.float64)
-
-
-def _wrap_constant(value):
-    """Wrap a raw value into an expression node.
-
-    - Expression subclass -> return as-is
-    - int / float -> Constant with shape (1, 1)
-    - np.ndarray 1D (n,) -> Constant with shape (n, 1) (column vector)
-    - np.ndarray 2D (m, n) -> Constant with shape (m, n)
-    - scipy.sparse -> SparseConstant
-    """
-    # Avoid circular import: check for Expression base by duck-typing
-    # (has a .shape attribute and is from our module)
-    if hasattr(value, "_is_sparsediff_expr"):
-        return value
-
-    if isinstance(value, (int, float)):
-        return Constant(np.array([float(value)]), (1, 1))
-
-    if isinstance(value, np.ndarray):
-        if value.ndim == 0:
-            return Constant(np.array([value.item()]), (1, 1))
-        if value.ndim == 1:
-            return Constant(value, (value.shape[0], 1))
-        if value.ndim == 2:
-            return Constant(value, (value.shape[0], value.shape[1]))
-        raise ValueError(f"Cannot wrap {value.ndim}D array as constant")
-
-    if scipy.sparse.issparse(value):
-        return SparseConstant(value)
-
-    raise TypeError(f"Cannot convert {type(value).__name__} to expression")

@@ -2,11 +2,12 @@
 
 import numpy as np
 
-from sparsediffpy._core._expression import Expression
+from sparsediffpy._core._expression import Expression, _wrap_constant
 
 
 class _UnaryOp(Expression):
     def __init__(self, child):
+        child = _wrap_constant(child)
         self.child = child
         self.shape = child.shape
 
