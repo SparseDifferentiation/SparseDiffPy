@@ -32,10 +32,24 @@ class QuadOverLin(Expression):
 
 
 class RelEntr(Expression):
-    """x * log(x / y) elementwise."""
+    """x * log(x / y) elementwise.
+
+    Supports three variants (auto-dispatched by the C layer):
+    - Both same shape: elementwise
+    - Scalar x, vector y: x * log(x / y_i) for each i
+    - Vector x, scalar y: x_i * log(x_i / y) for each i
+    """
     def __init__(self, x, y):
-        if x.shape != y.shape:
-            raise ValueError(f"rel_entr: shape mismatch {x.shape} vs {y.shape}")
+        if x.shape == y.shape:
+            self.shape = x.shape
+        elif is_scalar(x.shape):
+            self.shape = y.shape
+        elif is_scalar(y.shape):
+            self.shape = x.shape
+        else:
+            raise ValueError(
+                f"rel_entr: shapes must match or one must be scalar, "
+                f"got {x.shape} and {y.shape}"
+            )
         self.x = x
         self.y = y
-        self.shape = x.shape

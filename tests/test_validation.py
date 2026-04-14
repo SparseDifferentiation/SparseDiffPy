@@ -44,7 +44,7 @@ class TestShapeMismatch:
     def test_rel_entr_shape_mismatch(self, scope):
         x = scope.Variable(3, 1)
         y = scope.Variable(2, 1)
-        with pytest.raises(ValueError, match="shape mismatch"):
+        with pytest.raises(ValueError, match="shapes must match or one must be scalar"):
             sp.rel_entr(x, y)
 
     def test_quad_over_lin_non_scalar_z(self, scope):
