@@ -39,14 +39,18 @@ def quad_form(x, Q):
 
 
 def quad_over_lin(x, z):
-    """sum(x^2) / z where z is a scalar expression."""
-    x = _wrap_constant(x)
-    z = _wrap_constant(z)
+    """sum(x^2) / z where z is a scalar variable.
+
+    Both arguments must be variable-dependent expressions.
+    z must be a plain Variable (not a composition).
+    """
     return QuadOverLin(x, z)
 
 
 def rel_entr(x, y):
-    """x * log(x / y) elementwise."""
-    x = _wrap_constant(x)
-    y = _wrap_constant(y)
+    """x * log(x / y) elementwise.
+
+    Both arguments must be variable-dependent expressions.
+    The C engine does not support constant arguments.
+    """
     return RelEntr(x, y)
