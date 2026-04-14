@@ -130,6 +130,44 @@ class TestAtomValidation:
         with pytest.raises(ValueError, match="cannot be applied directly"):
             sp.entr(x[1:3])
 
+    def test_quad_over_lin_z_must_be_variable(self, scope):
+        x = scope.Variable(3, 1)
+        z = scope.Variable(1, 1)
+        # This should work — z is a plain variable, not in numerator
+        sp.quad_over_lin(x, z)
+
+        # This should fail — z is an expression, not a plain variable
+        with pytest.raises(ValueError, match="must be a plain Variable"):
+            sp.quad_over_lin(x, sp.exp(z))
+
+    def test_quad_over_lin_z_not_in_numerator(self, scope):
+        x = scope.Variable(3, 1)
+        z = scope.Variable(1, 1)
+        # z appears in numerator via broadcast: x + z
+        with pytest.raises(ValueError, match="denominator variable z must not appear in the numerator"):
+            sp.quad_over_lin(x + z, z)
+
+        # z appears directly as scalar in numerator
+        with pytest.raises(ValueError, match="denominator variable z must not appear in the numerator"):
+            sp.quad_over_lin(z, z)
+
+    def test_prod_must_be_variable(self, scope):
+        x = scope.Variable(3, 1)
+        # This should work — x is a plain variable
+        sp.prod(x)
+
+        # This should fail — argument is a composition
+        with pytest.raises(ValueError, match="plain Variable"):
+            sp.prod(sp.sin(x))
+
+    def test_prod_axis_must_be_variable(self, scope):
+        X = scope.Variable(3, 2)
+        sp.prod(X, axis=0)
+        sp.prod(X, axis=1)
+
+        with pytest.raises(ValueError, match="plain Variable"):
+            sp.prod(sp.sin(X), axis=0)
+
 
 # ---------------------------------------------------------------------------
 # Wrong-size value assignment

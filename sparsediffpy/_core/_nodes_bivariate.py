@@ -4,6 +4,20 @@ from sparsediffpy._core._expression import Expression
 from sparsediffpy._core._shapes import is_scalar
 
 
+def _expr_contains_variable(expr, var):
+    """Check if a specific Variable object appears anywhere in an expression tree."""
+    if expr is var:
+        return True
+    for attr in ("child", "left", "right", "x", "y", "z", "param_expr", "matrix_expr"):
+        child = getattr(expr, attr, None)
+        if child is not None and _expr_contains_variable(child, var):
+            return True
+    for child in getattr(expr, "children", []):
+        if _expr_contains_variable(child, var):
+            return True
+    return False
+
+
 class Multiply(Expression):
     """Elementwise multiply (both operands are variable-dependent)."""
     def __init__(self, left, right):
@@ -22,10 +36,25 @@ class MatMul(Expression):
 
 
 class QuadOverLin(Expression):
-    """sum(x^2) / z where z is a scalar."""
+    """sum(x^2) / z where z is a scalar variable.
+
+    z must be a plain Variable and must not appear in x.
+    """
     def __init__(self, x, z):
         if not is_scalar(z.shape):
             raise ValueError(f"quad_over_lin: z must be scalar, got shape {z.shape}")
+        from sparsediffpy._core._scope import Variable
+        if not isinstance(z, Variable):
+            raise ValueError(
+                "quad_over_lin: z (second argument) must be a plain Variable. "
+                "The C engine requires this — compositions like quad_over_lin(x, f(y)) "
+                "are not supported."
+            )
+        if _expr_contains_variable(x, z):
+            raise ValueError(
+                "quad_over_lin: the denominator variable z must not appear in "
+                "the numerator x. Use separate variables for numerator and denominator."
+            )
         self.x = x
         self.z = z
         self.shape = (1, 1)

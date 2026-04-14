@@ -55,6 +55,11 @@ class Reshape(Expression):
 class Broadcast(Expression):
     """Broadcast scalar/row/column to a target shape."""
     def __init__(self, child, target_shape):
+        if child.shape == target_shape:
+            raise ValueError(
+                f"Broadcast is unnecessary: child shape {child.shape} "
+                f"already matches target {target_shape}"
+            )
         self.child = child
         self.shape = target_shape
 

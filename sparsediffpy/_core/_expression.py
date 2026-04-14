@@ -150,30 +150,23 @@ for _cls in (Constant, SparseConstant):
 # Operator dispatch helpers
 # ---------------------------------------------------------------------------
 
-def _maybe_broadcast(node, target_shape):
-    from sparsediffpy._core._nodes_affine import Broadcast
-    if node.shape == target_shape:
-        return node
-    return Broadcast(node, target_shape)
-
-
 def _is_param_like(node):
     from sparsediffpy._core._scope import Parameter
     return isinstance(node, (Constant, SparseConstant, Parameter))
 
 
 def _make_add(left, right):
-    from sparsediffpy._core._nodes_affine import Add
+    from sparsediffpy._core._nodes_affine import Add, Broadcast
     result_shape, left_bc, right_bc = broadcast_shape(left.shape, right.shape)
     if left_bc:
-        left = _maybe_broadcast(left, result_shape)
+        left = Broadcast(left, result_shape)
     if right_bc:
-        right = _maybe_broadcast(right, result_shape)
+        right = Broadcast(right, result_shape)
     return Add(left, right)
 
 
 def _make_mul(left, right):
-    from sparsediffpy._core._nodes_affine import ParamScalarMult, ParamVectorMult
+    from sparsediffpy._core._nodes_affine import Broadcast, ParamScalarMult, ParamVectorMult
     from sparsediffpy._core._nodes_bivariate import Multiply
     from sparsediffpy._core._scope import Parameter
 
@@ -189,9 +182,9 @@ def _make_mul(left, right):
 
     result_shape, left_bc, right_bc = broadcast_shape(left.shape, right.shape)
     if left_bc:
-        left = _maybe_broadcast(left, result_shape)
+        left = Broadcast(left, result_shape)
     if right_bc:
-        right = _maybe_broadcast(right, result_shape)
+        right = Broadcast(right, result_shape)
 
     if _is_param_like(left):
         return ParamVectorMult(left, right)
