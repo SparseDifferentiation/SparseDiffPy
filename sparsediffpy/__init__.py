@@ -24,30 +24,18 @@ from sparsediffpy._core._expression import Expression  # noqa: F401
 # Compile
 from sparsediffpy._core._compile import compile  # noqa: F401
 
-# Named functions
-from sparsediffpy._core._functions import (  # noqa: F401
-    sin,
-    cos,
-    exp,
-    log,
-    tan,
-    sinh,
-    tanh,
-    asinh,
-    atanh,
-    logistic,
-    normal_cdf,
-    entr,
-    xexp,
-    diag_vec,
-    power,
-    sum,
-    prod,
-    reshape,
-    trace,
-    hstack,
-    vstack,
-    quad_form,
-    quad_over_lin,
-    rel_entr,
+# Elementwise functions
+from sparsediffpy._core._fn_elementwise import (  # noqa: F401
+    sin, cos, exp, log, tan, sinh, tanh, asinh, atanh,
+    logistic, normal_cdf, entr, xexp, power,
+)
+
+# Affine / structural functions
+from sparsediffpy._core._fn_affine import (  # noqa: F401
+    diag_vec, trace, reshape, sum, prod, hstack, vstack,
+)
+
+# Bivariate / special functions
+from sparsediffpy._core._fn_bivariate import (  # noqa: F401
+    quad_form, quad_over_lin, rel_entr,
 )
