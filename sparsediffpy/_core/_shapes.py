@@ -17,13 +17,6 @@ def is_scalar(shape):
     return shape == (1, 1)
 
 
-def is_column(shape):
-    return shape[1] == 1
-
-
-def is_row(shape):
-    return shape[0] == 1
-
 
 def broadcast_shape(left_shape, right_shape):
     """Compute broadcast result shape for elementwise operations.

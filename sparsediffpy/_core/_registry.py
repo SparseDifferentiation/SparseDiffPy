@@ -113,13 +113,6 @@ def convert_quad_form(node, child_caps):
     )
 
 
-def convert_param_scalar_mult(node, child_caps):
-    return _C.make_param_scalar_mult(child_caps[0], child_caps[1])
-
-
-def convert_param_vector_mult(node, child_caps):
-    return _C.make_param_vector_mult(child_caps[0], child_caps[1])
-
 
 # ---------------------------------------------------------------------------
 # Registry dict
