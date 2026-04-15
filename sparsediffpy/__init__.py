@@ -14,4 +14,28 @@ See the License for the specific language governing permissions and
 limitations under the License.
 """
 
+# C extension (low-level, for advanced users)
 from sparsediffpy import _sparsediffengine  # noqa: F401
+
+# Core classes
+from sparsediffpy._core._scope import Scope, Variable, Parameter, DimensionError  # noqa: F401
+from sparsediffpy._core._expression import Expression  # noqa: F401
+
+# Compile
+from sparsediffpy._core._compile import compile  # noqa: F401
+
+# Elementwise functions
+from sparsediffpy._core._fn_elementwise import (  # noqa: F401
+    sin, cos, exp, log, tan, sinh, tanh, asinh, atanh,
+    logistic, normal_cdf, entr, xexp, power,
+)
+
+# Affine / structural functions
+from sparsediffpy._core._fn_affine import (  # noqa: F401
+    diag_vec, trace, reshape, sum, prod, hstack, vstack,
+)
+
+# Bivariate / special functions
+from sparsediffpy._core._fn_bivariate import (  # noqa: F401
+    quad_form, quad_over_lin, rel_entr,
+)
