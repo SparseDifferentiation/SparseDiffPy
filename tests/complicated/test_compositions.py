@@ -310,3 +310,40 @@ class TestDeepChain:
         checker = NumericalDerivativeChecker(fn, scope)
         x0 = random_point(scope, rng, low=-0.5, high=0.5)
         checker.check_hessian(x0, rng.standard_normal(3))
+
+
+# -----------------------------------------------------------------------
+# 9. Matrix hessian: sin(A @ X) with matrix variable and 2D weights
+# -----------------------------------------------------------------------
+
+class TestMatrixHessian:
+    def test_sin_AX_hessian(self, scope, rng):
+        X = scope.Variable(3, 3)
+        A = rng.standard_normal((3, 3))
+        f = sp.sin(A @ X)
+        fn = sp.compile(f)
+        checker = NumericalDerivativeChecker(fn, scope)
+        x0 = random_point(scope, rng, low=-0.5, high=0.5)
+        weights = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=np.float64)
+        checker.check_hessian(x0, weights.ravel(order='F'))
+
+    def test_sin_AX_hessian_2d_weights(self, scope, rng):
+        """Passing weights as a 2D array — hessian() should flatten column-major."""
+        X = scope.Variable(3, 3)
+        A = rng.standard_normal((3, 3))
+        f = sp.sin(A @ X)
+        fn = sp.compile(f)
+        x0 = random_point(scope, rng, low=-0.5, high=0.5)
+        weights = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=np.float64)
+
+        # 2D weights should be flattened column-major internally
+        fn.forward()
+        fn.jacobian()
+        H_2d = fn.hessian(weights)
+
+        # Compare against explicitly flattened F-order weights
+        fn.forward()
+        fn.jacobian()
+        H_flat = fn.hessian(weights.ravel(order='F'))
+
+        np.testing.assert_allclose(H_2d.toarray(), H_flat.toarray())
