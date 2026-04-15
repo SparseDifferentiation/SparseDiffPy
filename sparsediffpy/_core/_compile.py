@@ -30,31 +30,27 @@ def compile(expr):
     """Compile an expression tree into a CompiledExpression.
 
     Walks the Python expression tree, discovers all Variables and Parameters,
-    builds C capsules bottom-up, creates a C problem, and initializes
-    sparsity patterns for Jacobian and Hessian computation.
+    builds C capsules bottom-up, and initializes sparsity patterns for
+    Jacobian and Hessian computation.
     """
-    # 1. Collect all Variable and Parameter leaves
+    # Collect all Variable and Parameter leaves. Raise an error
+    # if the expression does not contain any variable. 
     variables = []
     parameters = []
     _collect_leaves(expr, variables, parameters, set())
 
-    # 2. Determine the scope
-    scope = None
-    for v in variables:
-        if scope is None:
-            scope = v._scope
-        elif v._scope is not scope:
+    if not variables:
+        raise ValueError("Expression must contain at least one Variable")
+
+    # Check that all variables in the expression have the same scope
+    scope = variables[0]._scope
+    for v in variables[1:]:
+        if v._scope is not scope:
             raise ValueError("All variables must belong to the same Scope")
 
-    if scope is None:
-        from sparsediffpy._core._scope import Scope
-        scope = Scope()
-
     n_vars = scope._next_var_offset
-    if n_vars == 0:
-        n_vars = 1  # C layer needs at least 1 variable
 
-    # 3. Build C capsules bottom-up
+    # Build C capsules bottom-up
     capsule_cache = {}
     param_capsules_ordered = []
     param_objects_ordered = []
@@ -62,27 +58,16 @@ def compile(expr):
         expr, n_vars, capsule_cache, param_capsules_ordered, param_objects_ordered
     )
 
-    # 4. Create dummy zero objective (scalar)
-    dummy_obj = _C.make_parameter(1, 1, -1, n_vars, np.array([0.0]))
-
-    # 5. Create C problem with expr as the single constraint
-    problem = _C.make_problem(dummy_obj, [root_capsule], False)
-
-    # 6. Register parameters if any
-    if param_capsules_ordered:
-        _C.problem_register_params(problem, param_capsules_ordered)
-
-    # 7. Init sparsity patterns
-    _C.problem_init_jacobian(problem)
-    _C.problem_init_hessian(problem)
+    # Init sparsity patterns directly on the expression
+    _C.expr_init_jacobian(root_capsule)
+    _C.expr_init_hessian(root_capsule)
 
     return CompiledExpression(
-        problem_capsule=problem,
+        expr_capsule=root_capsule,
         scope=scope,
         param_capsules=param_capsules_ordered,
         param_objects=param_objects_ordered,
         expr_shape=expr.shape,
-        n_vars=n_vars,
     )
 
 
@@ -106,21 +91,18 @@ def _collect_leaves(node, variables, parameters, visited):
     if isinstance(node, (Constant, SparseConstant)):
         return
 
-    # Walk children
+    # Walk children. Nodes use one of three conventions:
+    #   .child            — unary ops (Neg, Sin, Exp, Reshape, ...)
+    #   .left / .right    — binary ops (Add, Multiply, MatMul, ParamScalarMult, ...)
+    #   .matrix_expr      — LeftMatMul / RightMatMul (the constant/parameter matrix)
+    # HStack uses .children. Some nodes combine these (e.g. LeftMatMul has both
+    # .child and .matrix_expr).
     if hasattr(node, "child"):
         _collect_leaves(node.child, variables, parameters, visited)
     if hasattr(node, "left"):
         _collect_leaves(node.left, variables, parameters, visited)
     if hasattr(node, "right"):
         _collect_leaves(node.right, variables, parameters, visited)
-    if hasattr(node, "x") and hasattr(node, "z"):
-        _collect_leaves(node.x, variables, parameters, visited)
-        _collect_leaves(node.z, variables, parameters, visited)
-    elif hasattr(node, "x") and hasattr(node, "y"):
-        _collect_leaves(node.x, variables, parameters, visited)
-        _collect_leaves(node.y, variables, parameters, visited)
-    if hasattr(node, "param_expr"):
-        _collect_leaves(node.param_expr, variables, parameters, visited)
     if hasattr(node, "matrix_expr"):
         _collect_leaves(node.matrix_expr, variables, parameters, visited)
     if hasattr(node, "children"):
@@ -135,6 +117,8 @@ def _collect_leaves(node, variables, parameters, visited):
 def _build_capsule(node, n_vars, cache, param_caps, param_objs):
     """Recursively build C capsules for the expression tree."""
     node_id = id(node)
+    
+    # catch common subexpressions
     if node_id in cache:
         return cache[node_id]
 
@@ -156,33 +140,28 @@ def _build_capsule(node, n_vars, cache, param_caps, param_objs):
 def _convert_node(node, n_vars, cache, param_caps, param_objs):
     """Convert a single Python expression node to a C capsule."""
 
+    d1, d2 = node.shape
+
     # --- Leaves ---
     if isinstance(node, Variable):
-        return _C.make_variable(
-            node.shape[0], node.shape[1], node._var_id, n_vars
-        )
+        return _C.make_variable(d1, d2, node._var_id, n_vars)
 
     if isinstance(node, Parameter):
         # Use current values if set, otherwise zeros as placeholder.
         # Real values are synced via problem_update_params before evaluation.
-        size = node.shape[0] * node.shape[1]
+        size = d1 * d2
         values = node._value_flat if node._value_flat is not None else np.zeros(size)
-        cap = _C.make_parameter(
-            node.shape[0], node.shape[1], node._param_id, n_vars, values,
-        )
+        cap = _C.make_parameter(d1, d2, node._param_id, n_vars, values)
         param_caps.append(cap)
         param_objs.append(node)
         return cap
 
     if isinstance(node, Constant):
-        return _C.make_parameter(
-            node.shape[0], node.shape[1], -1, n_vars, node._value_flat
-        )
+        return _C.make_parameter(d1, d2, -1, n_vars, node._value_flat)
 
     if isinstance(node, SparseConstant):
-        return _C.make_parameter(
-            node.shape[0], node.shape[1], -1, n_vars, node._to_dense_flat()
-        )
+        # right now we don't support sparse parameters in the C engine
+        return _C.make_parameter(d1, d2, -1, n_vars, node._to_dense_flat())
 
     # --- Matmul and multiply with parameter dispatch ---
     # These need special handling because they access matrix_expr / param_expr
@@ -194,13 +173,13 @@ def _convert_node(node, n_vars, cache, param_caps, param_objs):
         return _convert_right_matmul(node, n_vars, cache, param_caps, param_objs)
 
     if isinstance(node, ParamScalarMult):
-        param_cap = _build_capsule(node.param_expr, n_vars, cache, param_caps, param_objs)
-        child_cap = _build_capsule(node.child, n_vars, cache, param_caps, param_objs)
+        param_cap = _build_capsule(node.left, n_vars, cache, param_caps, param_objs)
+        child_cap = _build_capsule(node.right, n_vars, cache, param_caps, param_objs)
         return _C.make_param_scalar_mult(param_cap, child_cap)
 
     if isinstance(node, ParamVectorMult):
-        param_cap = _build_capsule(node.param_expr, n_vars, cache, param_caps, param_objs)
-        child_cap = _build_capsule(node.child, n_vars, cache, param_caps, param_objs)
+        param_cap = _build_capsule(node.left, n_vars, cache, param_caps, param_objs)
+        child_cap = _build_capsule(node.right, n_vars, cache, param_caps, param_objs)
         return _C.make_param_vector_mult(param_cap, child_cap)
 
     # --- Registry lookup ---
@@ -223,13 +202,6 @@ def _build_children(node, n_vars, cache, param_caps, param_objs):
         caps.append(_build_capsule(node.left, n_vars, cache, param_caps, param_objs))
     if hasattr(node, "right"):
         caps.append(_build_capsule(node.right, n_vars, cache, param_caps, param_objs))
-    # QuadOverLin/RelEntr: .x, .y or .x, .z
-    if hasattr(node, "x") and not caps:
-        caps.append(_build_capsule(node.x, n_vars, cache, param_caps, param_objs))
-        if hasattr(node, "z"):
-            caps.append(_build_capsule(node.z, n_vars, cache, param_caps, param_objs))
-        elif hasattr(node, "y"):
-            caps.append(_build_capsule(node.y, n_vars, cache, param_caps, param_objs))
     # HStack: .children
     if hasattr(node, "children"):
         for c in node.children:
@@ -239,6 +211,8 @@ def _build_children(node, n_vars, cache, param_caps, param_objs):
 
 # ---------------------------------------------------------------------------
 # Left/right matmul converters
+# These live here rather than in _registry.py because the Parameter case
+# needs _build_capsule, which would create a circular dependency.
 # ---------------------------------------------------------------------------
 
 def _convert_left_matmul(node, n_vars, cache, param_caps, param_objs):
@@ -252,14 +226,12 @@ def _convert_left_matmul(node, n_vars, cache, param_caps, param_objs):
 
     if isinstance(matrix, Parameter):
         param_cap = _build_capsule(matrix, n_vars, cache, param_caps, param_objs)
-        return make_dense_left_matmul(
-            param_cap, child_cap, _to_dense_row_major(matrix), m, n
-        )
+        vals = _to_dense_row_major(matrix)
+        return make_dense_left_matmul(param_cap, child_cap, vals, m, n)
 
     if isinstance(matrix, Constant):
-        return make_dense_left_matmul(
-            None, child_cap, _to_dense_row_major(matrix), m, n
-        )
+        vals = _to_dense_row_major(matrix)
+        return make_dense_left_matmul(None, child_cap, vals, m, n)
 
     raise TypeError(f"LeftMatMul matrix must be Constant, SparseConstant, or Parameter")
 
@@ -275,14 +247,12 @@ def _convert_right_matmul(node, n_vars, cache, param_caps, param_objs):
 
     if isinstance(matrix, Parameter):
         param_cap = _build_capsule(matrix, n_vars, cache, param_caps, param_objs)
-        return make_dense_right_matmul(
-            param_cap, child_cap, _to_dense_row_major(matrix), m, n
-        )
+        vals = _to_dense_row_major(matrix)
+        return make_dense_right_matmul(param_cap, child_cap, vals, m, n)
 
     if isinstance(matrix, Constant):
-        return make_dense_right_matmul(
-            None, child_cap, _to_dense_row_major(matrix), m, n
-        )
+        vals = _to_dense_row_major(matrix)
+        return make_dense_right_matmul(None, child_cap, vals, m, n)
 
     raise TypeError(f"RightMatMul matrix must be Constant, SparseConstant, or Parameter")
 
@@ -298,17 +268,16 @@ class CompiledExpression:
     Reads parameter values from the Parameter objects.
     """
 
-    def __init__(self, problem_capsule, scope, param_capsules, param_objects,
-                 expr_shape, n_vars):
-        self._problem = problem_capsule
+    def __init__(self, expr_capsule, scope, param_capsules, param_objects,
+                 expr_shape):
+        self._expr = expr_capsule
         self._scope = scope
         self._param_capsules = param_capsules
         self._param_objects = param_objects
         self._expr_shape = expr_shape
-        self._n_vars = n_vars
 
     def _sync_params(self):
-        """Push current parameter values to the C problem."""
+        """Push current parameter values to the C expression."""
         if not self._param_objects:
             return
         for p in self._param_objects:
@@ -319,19 +288,17 @@ class CompiledExpression:
                 )
         theta_parts = [p._value_flat for p in self._param_objects]
         theta = np.concatenate(theta_parts)
-        _C.problem_update_params(self._problem, theta)
+        _C.expr_update_params(self._expr, self._param_capsules, theta)
 
     def _set_point(self):
         """Push variable values and evaluate forward pass."""
         self._sync_params()
-        _C.problem_objective_forward(self._problem, self._scope._flat_values)
-        _C.problem_constraint_forward(self._problem, self._scope._flat_values)
+        _C.expr_forward(self._expr, self._scope._flat_values)
 
     def forward(self):
         """Evaluate the expression at the current variable values."""
-        self._set_point()
-        result = _C.problem_constraint_forward(self._problem, self._scope._flat_values)
-        return result
+        self._sync_params()
+        return _C.expr_forward(self._expr, self._scope._flat_values)
 
     def jacobian(self):
         """Compute the sparse Jacobian at the current variable values.
@@ -339,7 +306,7 @@ class CompiledExpression:
         Returns scipy.sparse.csr_matrix of shape (expr_size, n_vars).
         """
         self._set_point()
-        data, indices, indptr, (m, n) = _C.problem_jacobian(self._problem)
+        data, indices, indptr, (m, n) = _C.expr_jacobian(self._expr)
         return scipy.sparse.csr_matrix((data, indices, indptr), shape=(m, n))
 
     def hessian(self, weights):
@@ -355,8 +322,6 @@ class CompiledExpression:
         """
         weights = np.asarray(weights, dtype=np.float64).ravel()
         self._set_point()
-        _C.problem_jacobian(self._problem)
-        data, indices, indptr, (m, n) = _C.problem_hessian(
-            self._problem, 0.0, weights
-        )
+        _C.expr_jacobian(self._expr)
+        data, indices, indptr, (m, n) = _C.expr_hessian(self._expr, weights)
         return scipy.sparse.csr_matrix((data, indices, indptr), shape=(m, n))

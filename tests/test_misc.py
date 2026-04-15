@@ -3,6 +3,7 @@ parameter jacobian after update, x.T@x, sub with broadcast, scope roundtrip,
 compile twice, degenerate cases."""
 
 import numpy as np
+import pytest
 import sparsediffpy as sp
 from tests.utils import NumericalDerivativeChecker, random_point, random_positive_point
 
@@ -335,12 +336,12 @@ class TestDegenerateCases:
         J = fn.jacobian().toarray()
         np.testing.assert_allclose(J, np.eye(3))
 
-    def test_constant_expression(self, scope, rng):
-        """Compiling a constant (no variables)."""
+    def test_constant_expression_raises(self, scope, rng):
+        """Compiling a constant (no variables) should raise."""
         from sparsediffpy._core._constants import Constant
         c = Constant(np.array([1.0, 2.0, 3.0]), (3, 1))
-        fn = sp.compile(c)
-        np.testing.assert_allclose(fn.forward(), [1.0, 2.0, 3.0])
+        with pytest.raises(ValueError, match="at least one Variable"):
+            sp.compile(c)
 
     def test_nested_transpose(self, scope, rng):
         """x.T.T should be x."""

@@ -56,8 +56,8 @@ class QuadOverLin(Expression):
             raise ValueError(
                 "quad_over_lin: z must not appear in x."
             )
-        self.x = x
-        self.z = z
+        self.left = x
+        self.right = z
         self.shape = (1, 1)
 
 
@@ -81,5 +81,5 @@ class RelEntr(Expression):
                 f"rel_entr: shapes must match or one must be scalar, "
                 f"got {x.shape} and {y.shape}"
             )
-        self.x = x
-        self.y = y
+        self.left = x
+        self.right = y

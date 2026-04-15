@@ -106,18 +106,18 @@ class Index(Expression):
 
 class ParamScalarMult(Expression):
     """a * f(x) where a is a scalar constant/parameter."""
-    def __init__(self, param_expr, child):
-        self.param_expr = param_expr
-        self.child = child
-        self.shape = child.shape
+    def __init__(self, left, right):
+        self.left = left
+        self.right = right
+        self.shape = right.shape
 
 
 class ParamVectorMult(Expression):
     """a . f(x) elementwise where a is a constant/parameter of matching shape."""
-    def __init__(self, param_expr, child):
-        self.param_expr = param_expr
-        self.child = child
-        self.shape = child.shape
+    def __init__(self, left, right):
+        self.left = left
+        self.right = right
+        self.shape = right.shape
 
 
 class LeftMatMul(Expression):

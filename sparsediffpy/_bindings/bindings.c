@@ -44,6 +44,13 @@
 #include "atoms/vector_mult.h"
 #include "atoms/xexp.h"
 
+/* Include expression-level bindings */
+#include "expression/forward.h"
+#include "expression/hessian.h"
+#include "expression/init_derivatives.h"
+#include "expression/jacobian.h"
+#include "expression/update_params.h"
+
 /* Include problem bindings */
 #include "problem/constraint_forward.h"
 #include "problem/gradient.h"
@@ -125,6 +132,18 @@ static PyMethodDef DNLPMethods[] = {
     {"get_expr_size", py_get_expr_size, METH_VARARGS,
      "Get the total size of an expression"},
     {"make_reshape", py_make_reshape, METH_VARARGS, "Create reshape atom"},
+    {"expr_forward", py_expr_forward, METH_VARARGS,
+     "Evaluate expression forward pass"},
+    {"expr_init_jacobian", py_expr_init_jacobian, METH_VARARGS,
+     "Initialize Jacobian sparsity for expression"},
+    {"expr_init_hessian", py_expr_init_hessian, METH_VARARGS,
+     "Initialize Hessian sparsity for expression"},
+    {"expr_jacobian", py_expr_jacobian, METH_VARARGS,
+     "Evaluate expression Jacobian"},
+    {"expr_hessian", py_expr_hessian, METH_VARARGS,
+     "Evaluate expression weighted-sum Hessian"},
+    {"expr_update_params", py_expr_update_params, METH_VARARGS,
+     "Update parameter values and propagate refresh flag"},
     {"make_problem", py_make_problem, METH_VARARGS,
      "Create problem from objective and constraints"},
     {"problem_init_derivatives", py_problem_init_derivatives, METH_VARARGS,
