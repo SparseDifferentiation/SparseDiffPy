@@ -69,9 +69,9 @@ def make_mul(left, right):
 def make_matmul(left, right):
     result_shape = check_matmul_shapes(left.shape, right.shape)
 
-    if _is_param_like(left) and not _is_param_like(right):
+    if _is_param_like(left):
         return LeftMatMul(left, right, result_shape)
-    if _is_param_like(right) and not _is_param_like(left):
+    if _is_param_like(right):
         return RightMatMul(right, left, result_shape)
     return MatMul(left, right, result_shape)
 
@@ -103,25 +103,20 @@ def make_index(node, key):
         out_d2 = len(col_indices)
     else:
         if d2 == 1:
-            indices = _resolve_axis_index(key, d1)
-            flat_indices = indices
-            out_d1 = len(indices)
+            flat_indices = _resolve_axis_index(key, d1)
+            out_d1 = len(flat_indices)
             out_d2 = 1
         elif d1 == 1:
-            indices = _resolve_axis_index(key, d2)
-            flat_indices = [i * d1 for i in indices]
+            flat_indices = _resolve_axis_index(key, d2)
             out_d1 = 1
-            out_d2 = len(indices)
+            out_d2 = len(flat_indices)
         else:
-            total = d1 * d2
-            indices = _resolve_axis_index(key, total)
-            flat_indices = indices
-            out_d1 = len(indices)
+            flat_indices = _resolve_axis_index(key, d1 * d2)
+            out_d1 = len(flat_indices)
             out_d2 = 1
 
-    result_shape = (out_d1, out_d2)
     flat_arr = np.array(flat_indices, dtype=np.int32)
-    return Index(node, flat_arr, result_shape)
+    return Index(node, flat_arr, (out_d1, out_d2))
 
 
 def _resolve_axis_index(key, length):
