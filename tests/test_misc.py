@@ -18,6 +18,8 @@ class TestAffineHessians:
         f = -x
         fn = sp.compile(f)
         x0 = random_point(scope, rng)
+        fn.forward()
+        fn.jacobian()
         H = fn.hessian(rng.standard_normal(3))
         np.testing.assert_allclose(H.toarray(), np.zeros((3, 3)), atol=1e-14)
 
@@ -27,6 +29,8 @@ class TestAffineHessians:
         f = x + y
         fn = sp.compile(f)
         x0 = random_point(scope, rng)
+        fn.forward()
+        fn.jacobian()
         H = fn.hessian(rng.standard_normal(3))
         np.testing.assert_allclose(H.toarray(), np.zeros((6, 6)), atol=1e-14)
 
@@ -36,6 +40,8 @@ class TestAffineHessians:
         f = sp.hstack([x, y])
         fn = sp.compile(f)
         x0 = random_point(scope, rng)
+        fn.forward()
+        fn.jacobian()
         H = fn.hessian(rng.standard_normal(6))
         np.testing.assert_allclose(H.toarray(), np.zeros((6, 6)), atol=1e-14)
 
@@ -44,6 +50,8 @@ class TestAffineHessians:
         f = x[1:3]
         fn = sp.compile(f)
         x0 = random_point(scope, rng)
+        fn.forward()
+        fn.jacobian()
         H = fn.hessian(rng.standard_normal(2))
         np.testing.assert_allclose(H.toarray(), np.zeros((4, 4)), atol=1e-14)
 
@@ -52,6 +60,8 @@ class TestAffineHessians:
         f = sp.sum(x)
         fn = sp.compile(f)
         x0 = random_point(scope, rng)
+        fn.forward()
+        fn.jacobian()
         H = fn.hessian(np.array([1.0]))
         np.testing.assert_allclose(H.toarray(), np.zeros((6, 6)), atol=1e-14)
 
@@ -87,10 +97,12 @@ class TestReEvaluation:
         fn = sp.compile(f)
 
         x.value = np.array([0.0, 0.0, 0.0])
+        fn.forward()
         J1 = fn.jacobian().toarray()
         np.testing.assert_allclose(np.diag(J1), np.cos([0, 0, 0]))
 
         x.value = np.array([1.0, 2.0, 3.0])
+        fn.forward()
         J2 = fn.jacobian().toarray()
         np.testing.assert_allclose(np.diag(J2), np.cos([1, 2, 3]))
 
@@ -101,10 +113,14 @@ class TestReEvaluation:
         w = np.ones(3)
 
         x.value = np.array([0.0, 0.0, 0.0])
+        fn.forward()
+        fn.jacobian()
         H1 = fn.hessian(w).toarray()
         np.testing.assert_allclose(np.diag(H1), -np.sin([0, 0, 0]), atol=1e-14)
 
         x.value = np.array([1.0, 2.0, 3.0])
+        fn.forward()
+        fn.jacobian()
         H2 = fn.hessian(w).toarray()
         np.testing.assert_allclose(np.diag(H2), -np.sin([1, 2, 3]))
 
@@ -156,10 +172,12 @@ class TestParameterJacobianAfterUpdate:
         fn = sp.compile(f)
 
         x0 = random_point(scope, rng)
+        fn.forward()
         J1 = fn.jacobian().toarray()
         np.testing.assert_allclose(J1, np.eye(3), atol=1e-14)
 
         A.value = 2 * np.eye(3)
+        fn.forward()
         J2 = fn.jacobian().toarray()
         np.testing.assert_allclose(J2, 2 * np.eye(3), atol=1e-14)
 
@@ -171,10 +189,12 @@ class TestParameterJacobianAfterUpdate:
         fn = sp.compile(f)
 
         x0 = random_point(scope, rng)
+        fn.forward()
         J1 = fn.jacobian().toarray()
         np.testing.assert_allclose(J1, 3.0 * np.eye(3), atol=1e-14)
 
         a.value = np.array([[7.0]])
+        fn.forward()
         J2 = fn.jacobian().toarray()
         np.testing.assert_allclose(J2, 7.0 * np.eye(3), atol=1e-14)
 
@@ -286,7 +306,9 @@ class TestCompileTwice:
         fn2 = sp.compile(f)
 
         x.value = np.array([1.0, 2.0, 3.0])
-        np.testing.assert_allclose(fn1.forward(), fn2.forward())
+        f1 = fn1.forward()
+        f2 = fn2.forward()
+        np.testing.assert_allclose(f1, f2)
         np.testing.assert_allclose(
             fn1.jacobian().toarray(), fn2.jacobian().toarray()
         )
@@ -333,7 +355,7 @@ class TestDegenerateCases:
         fn = sp.compile(x)
         x0 = random_point(scope, rng)
         np.testing.assert_allclose(fn.forward(), x0)
-        J = fn.jacobian().toarray()
+        J = fn.jacobian().toarray()  # forward() was just called above
         np.testing.assert_allclose(J, np.eye(3))
 
     def test_constant_expression_raises(self, scope, rng):

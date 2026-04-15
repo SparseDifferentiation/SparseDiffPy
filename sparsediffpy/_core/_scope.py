@@ -60,6 +60,7 @@ class Parameter(Expression):
         if val.size != self.size:
             raise DimensionError(f"expected {self.size} elements, got {val.size}")
         self._value_flat = val.copy()
+        self._scope._params_dirty = True
 
 
 class Scope:
@@ -71,6 +72,7 @@ class Scope:
         self._flat_values = np.zeros(0, dtype=np.float64)
         self._next_var_offset = 0
         self._next_param_offset = 0
+        self._params_dirty = False
 
     def Variable(self, d1, d2):
         """Create a new variable in this scope."""

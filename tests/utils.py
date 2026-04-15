@@ -31,6 +31,7 @@ class NumericalDerivativeChecker:
         self._scope.set_values(x0)
 
         # Analytical Jacobian
+        self._fn.forward()
         J_analytical = self._fn.jacobian().toarray()
         m = J_analytical.shape[0]
 
@@ -73,6 +74,8 @@ class NumericalDerivativeChecker:
 
         # Analytical Hessian
         self._scope.set_values(x0)
+        self._fn.forward()
+        self._fn.jacobian()
         H_analytical = self._fn.hessian(weights).toarray()
 
         # Numerical Hessian via central differences on the gradient
@@ -84,10 +87,12 @@ class NumericalDerivativeChecker:
             x_minus[j] -= self._h
 
             self._scope.set_values(x_plus)
+            self._fn.forward()
             J_plus = self._fn.jacobian().toarray()
             grad_plus = J_plus.T @ weights
 
             self._scope.set_values(x_minus)
+            self._fn.forward()
             J_minus = self._fn.jacobian().toarray()
             grad_minus = J_minus.T @ weights
 

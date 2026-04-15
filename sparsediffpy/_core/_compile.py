@@ -58,9 +58,8 @@ def compile(expr):
         expr, n_vars, capsule_cache, param_capsules_ordered, param_objects_ordered
     )
 
-    # Init sparsity patterns directly on the expression
-    _C.expr_init_jacobian(root_capsule)
-    _C.expr_init_hessian(root_capsule)
+    if param_capsules_ordered:
+        scope._params_dirty = True
 
     return CompiledExpression(
         expr_capsule=root_capsule,
@@ -275,10 +274,12 @@ class CompiledExpression:
         self._param_capsules = param_capsules
         self._param_objects = param_objects
         self._expr_shape = expr_shape
+        self._jacobian_initialized = False
+        self._hessian_initialized = False
 
     def _sync_params(self):
-        """Push current parameter values to the C expression."""
-        if not self._param_objects:
+        """Push current parameter values to the C expression if any changed."""
+        if not self._scope._params_dirty:
             return
         for p in self._param_objects:
             if p._value_flat is None:
@@ -289,28 +290,36 @@ class CompiledExpression:
         theta_parts = [p._value_flat for p in self._param_objects]
         theta = np.concatenate(theta_parts)
         _C.expr_update_params(self._expr, self._param_capsules, theta)
+        self._scope._params_dirty = False
 
-    def _set_point(self):
-        """Push variable values and evaluate forward pass."""
-        self._sync_params()
-        _C.expr_forward(self._expr, self._scope._flat_values)
+    def _ensure_jacobian_initialized(self):
+        if not self._jacobian_initialized:
+            _C.expr_init_jacobian(self._expr)
+            self._jacobian_initialized = True
 
     def forward(self):
-        """Evaluate the expression at the current variable values."""
+        """Evaluate the expression at the current variable values.
+
+        Must be called before jacobian() or hessian().
+        """
+        self._ensure_jacobian_initialized()
         self._sync_params()
         return _C.expr_forward(self._expr, self._scope._flat_values)
 
     def jacobian(self):
         """Compute the sparse Jacobian at the current variable values.
 
+        Requires forward() to have been called first.
+
         Returns scipy.sparse.csr_matrix of shape (expr_size, n_vars).
         """
-        self._set_point()
         data, indices, indptr, (m, n) = _C.expr_jacobian(self._expr)
         return scipy.sparse.csr_matrix((data, indices, indptr), shape=(m, n))
 
     def hessian(self, weights):
         """Compute the sparse Hessian of the weighted expression.
+
+        Requires forward() and jacobian() to have been called first.
 
         The Hessian is of the scalar function w^T f(x), where w is the
         weights vector and f is the compiled expression.
@@ -320,8 +329,9 @@ class CompiledExpression:
 
         Returns scipy.sparse.csr_matrix of shape (n_vars, n_vars).
         """
+        if not self._hessian_initialized:
+            _C.expr_init_hessian(self._expr)
+            self._hessian_initialized = True
         weights = np.asarray(weights, dtype=np.float64).ravel()
-        self._set_point()
-        _C.expr_jacobian(self._expr)
         data, indices, indptr, (m, n) = _C.expr_hessian(self._expr, weights)
         return scipy.sparse.csr_matrix((data, indices, indptr), shape=(m, n))
