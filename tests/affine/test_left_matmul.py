@@ -42,7 +42,8 @@ def test_left_matmul_sparse_forward(scope, rng):
 
 def test_left_matmul_parameter_jacobian(scope, rng):
     x = scope.Variable(3, 1)
-    A = scope.Parameter(4, 3, value=rng.standard_normal((4, 3)))
+    A = scope.Parameter(4, 3)
+    A.value = rng.standard_normal((4, 3))
     f = A @ x
     fn = sp.compile(f)
     checker = NumericalDerivativeChecker(fn, scope)
@@ -51,7 +52,8 @@ def test_left_matmul_parameter_jacobian(scope, rng):
 
 def test_left_matmul_parameter_update(scope, rng):
     x = scope.Variable(3, 1)
-    A = scope.Parameter(3, 3, value=np.eye(3))
+    A = scope.Parameter(3, 3)
+    A.value = np.eye(3)
     f = A @ x
     fn = sp.compile(f)
     x0 = random_point(scope, rng)

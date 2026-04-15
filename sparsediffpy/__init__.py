@@ -18,7 +18,7 @@ limitations under the License.
 from sparsediffpy import _sparsediffengine  # noqa: F401
 
 # Core classes
-from sparsediffpy._core._scope import Scope, Variable, Parameter  # noqa: F401
+from sparsediffpy._core._scope import Scope, Variable, Parameter, DimensionError  # noqa: F401
 from sparsediffpy._core._expression import Expression  # noqa: F401
 
 # Compile

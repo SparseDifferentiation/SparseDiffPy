@@ -176,27 +176,37 @@ class TestAtomValidation:
 class TestValueAssignment:
     def test_variable_wrong_size(self, scope):
         x = scope.Variable(3, 1)
-        with pytest.raises(ValueError, match="Expected 3"):
+        with pytest.raises(ValueError, match="expected 3 elements"):
             x.value = np.array([1.0, 2.0])
 
     def test_variable_too_many(self, scope):
         x = scope.Variable(3, 1)
-        with pytest.raises(ValueError, match="Expected 3"):
+        with pytest.raises(ValueError, match="expected 3 elements"):
             x.value = np.array([1.0, 2.0, 3.0, 4.0])
 
     def test_parameter_wrong_size(self, scope):
-        p = scope.Parameter(2, 2, value=np.eye(2))
-        with pytest.raises(ValueError, match="Expected 4"):
+        p = scope.Parameter(2, 2)
+        p.value = np.eye(2)
+        with pytest.raises(ValueError, match="expected 4 elements"):
             p.value = np.array([1.0, 2.0])
 
     def test_scope_set_values_wrong_size(self, scope):
         x = scope.Variable(3, 1)
-        with pytest.raises(ValueError, match="Expected flat array of size 3"):
+        with pytest.raises(ValueError, match="expected 3 elements"):
             scope.set_values(np.array([1.0, 2.0]))
 
-    def test_parameter_init_wrong_size(self, scope):
-        with pytest.raises(ValueError, match="elements"):
-            scope.Parameter(2, 2, value=np.array([1.0, 2.0]))
+    def test_parameter_unset_value_is_none(self, scope):
+        p = scope.Parameter(2, 2)
+        assert p.value is None
+
+    def test_parameter_unset_raises_on_eval(self, scope):
+        x = scope.Variable(3, 1)
+        A = scope.Parameter(3, 3)
+        f = A @ x
+        fn = sp.compile(f)
+        x.value = np.array([1.0, 2.0, 3.0])
+        with pytest.raises(ValueError, match="has no value set"):
+            fn.forward()
 
 
 # ---------------------------------------------------------------------------

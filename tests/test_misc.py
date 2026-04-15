@@ -149,7 +149,8 @@ class TestNegativeIndexing:
 class TestParameterJacobianAfterUpdate:
     def test_left_matmul_jacobian_after_update(self, scope, rng):
         x = scope.Variable(3, 1)
-        A = scope.Parameter(3, 3, value=np.eye(3))
+        A = scope.Parameter(3, 3)
+        A.value = np.eye(3)
         f = A @ x
         fn = sp.compile(f)
 
@@ -163,7 +164,8 @@ class TestParameterJacobianAfterUpdate:
 
     def test_scalar_mult_jacobian_after_update(self, scope, rng):
         x = scope.Variable(3, 1)
-        a = scope.Parameter(1, 1, value=np.array([[3.0]]))
+        a = scope.Parameter(1, 1)
+        a.value = np.array([[3.0]])
         f = a * x
         fn = sp.compile(f)
 

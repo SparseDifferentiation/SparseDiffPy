@@ -62,8 +62,14 @@ def make_dense_right_matmul(param_node, child_cap, A_flat, m, n):
 
 
 def _to_dense_row_major(matrix):
-    """Convert a Constant or Parameter to row-major flat data for dense matmul."""
+    """Convert a Constant or Parameter to row-major flat data for dense matmul.
+
+    For Parameters with no value set yet, returns zeros as a placeholder —
+    the real values are pushed via problem_update_params before evaluation.
+    """
     m, n = matrix.shape
+    if matrix._value_flat is None:
+        return np.zeros(m * n, dtype=np.float64)
     return matrix._value_flat.reshape((m, n), order="F").flatten(order="C")
 
 

@@ -21,7 +21,8 @@ def test_scalar_mult_constant_forward(scope, rng):
 
 def test_scalar_mult_parameter_jacobian(scope, rng):
     x = scope.Variable(4, 1)
-    a = scope.Parameter(1, 1, value=np.array([[3.0]]))
+    a = scope.Parameter(1, 1)
+    a.value = np.array([[3.0]])
     f = a * x
     fn = sp.compile(f)
     checker = NumericalDerivativeChecker(fn, scope)
@@ -30,7 +31,8 @@ def test_scalar_mult_parameter_jacobian(scope, rng):
 
 def test_scalar_mult_parameter_update(scope, rng):
     x = scope.Variable(3, 1)
-    a = scope.Parameter(1, 1, value=np.array([[2.0]]))
+    a = scope.Parameter(1, 1)
+    a.value = np.array([[2.0]])
     f = a * x
     fn = sp.compile(f)
     x0 = random_point(scope, rng)

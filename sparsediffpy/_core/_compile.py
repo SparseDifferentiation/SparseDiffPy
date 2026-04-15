@@ -163,9 +163,12 @@ def _convert_node(node, n_vars, cache, param_caps, param_objs):
         )
 
     if isinstance(node, Parameter):
+        # Use current values if set, otherwise zeros as placeholder.
+        # Real values are synced via problem_update_params before evaluation.
+        size = node.shape[0] * node.shape[1]
+        values = node._value_flat if node._value_flat is not None else np.zeros(size)
         cap = _C.make_parameter(
-            node.shape[0], node.shape[1], node._param_id, n_vars,
-            node._value_flat,
+            node.shape[0], node.shape[1], node._param_id, n_vars, values,
         )
         param_caps.append(cap)
         param_objs.append(node)
@@ -308,6 +311,12 @@ class CompiledExpression:
         """Push current parameter values to the C problem."""
         if not self._param_objects:
             return
+        for p in self._param_objects:
+            if p._value_flat is None:
+                raise ValueError(
+                    f"Parameter with shape {p.shape} has no value set. "
+                    f"Assign a value via parameter.value = ... before evaluating."
+                )
         theta_parts = [p._value_flat for p in self._param_objects]
         theta = np.concatenate(theta_parts)
         _C.problem_update_params(self._problem, theta)

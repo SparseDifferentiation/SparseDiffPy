@@ -6,6 +6,11 @@ from sparsediffpy._core._expression import Expression
 from sparsediffpy._core._shapes import validate_shape
 
 
+class DimensionError(ValueError):
+    """Raised when a value has the wrong number of elements."""
+    pass
+
+
 class Variable(Expression):
     """A decision variable in the expression tree.
 
@@ -20,61 +25,41 @@ class Variable(Expression):
 
     @property
     def value(self):
-        size = self.shape[0] * self.shape[1]
-        return self._scope._flat_values[self._var_id:self._var_id + size].copy()
+        return self._scope._flat_values[self._var_id:self._var_id + self.size].copy()
 
     @value.setter
     def value(self, val):
         val = np.asarray(val, dtype=np.float64).ravel()
-        size = self.shape[0] * self.shape[1]
-        if val.size != size:
-            raise ValueError(
-                f"Expected {size} elements for Variable with shape {self.shape}, "
-                f"got {val.size}"
-            )
-        self._scope._flat_values[self._var_id:self._var_id + size] = val
+        if val.size != self.size:
+            raise DimensionError(f"expected {self.size} elements, got {val.size}")
+        self._scope._flat_values[self._var_id:self._var_id + self.size] = val
 
 
 class Parameter(Expression):
     """An updatable parameter in the expression tree.
 
-    Created by Scope.Parameter(). Values are stored on the parameter itself
-    (not in the scope's flat buffer). Updated via .value property.
+    Created by Scope.Parameter(). Values must be set via .value before
+    evaluating any expression that uses this parameter.
     """
 
-    def __init__(self, scope, param_id, shape, value=None):
+    def __init__(self, scope, param_id, shape):
         self._scope = scope
         self._param_id = param_id
         self.shape = shape
-        size = shape[0] * shape[1]
-        if value is not None:
-            self._value_flat = np.asarray(value, dtype=np.float64).ravel(order="F")
-            if self._value_flat.size != size:
-                raise ValueError(
-                    f"Parameter value has {self._value_flat.size} elements, "
-                    f"expected {size} for shape {shape}"
-                )
-        else:
-            self._value_flat = np.zeros(size, dtype=np.float64)
+        self._value_flat = None
 
     @property
     def value(self):
+        if self._value_flat is None:
+            return None
         return self._value_flat.copy()
 
     @value.setter
     def value(self, val):
         val = np.asarray(val, dtype=np.float64).ravel(order="F")
-        size = self.shape[0] * self.shape[1]
-        if val.size != size:
-            raise ValueError(
-                f"Expected {size} elements for Parameter with shape {self.shape}, "
-                f"got {val.size}"
-            )
-        self._value_flat[:] = val
-
-
-# Patch _is_param_like to recognize Parameter
-# (already handled via lazy import in _expressions.py)
+        if val.size != self.size:
+            raise DimensionError(f"expected {self.size} elements, got {val.size}")
+        self._value_flat = val.copy()
 
 
 class Scope:
@@ -103,26 +88,27 @@ class Scope:
         self._variables.append(var)
         return var
 
-    def Parameter(self, d1, d2, value=None):
-        """Create a new updatable parameter in this scope."""
+    def Parameter(self, d1, d2):
+        """Create a new updatable parameter in this scope.
+
+        Set its value via .value = ... before evaluating.
+        """
         validate_shape(d1, d2)
         size = d1 * d2
         param_id = self._next_param_offset
         self._next_param_offset += size
 
-        param = Parameter(self, param_id, (d1, d2), value)
+        param = Parameter(self, param_id, (d1, d2))
         self._parameters.append(param)
         return param
 
-    def set_values(self, flat_array):
+    def set_values(self, array):
         """Set all variable values at once from a flat array."""
-        flat_array = np.asarray(flat_array, dtype=np.float64)
-        if flat_array.size != self._flat_values.size:
-            raise ValueError(
-                f"Expected flat array of size {self._flat_values.size}, "
-                f"got {flat_array.size}"
-            )
-        self._flat_values[:] = flat_array
+        array = np.asarray(array, dtype=np.float64)
+        in_size = self._flat_values.size
+        if array.size != in_size:
+            raise DimensionError(f"expected {in_size} elements, got {array.size}")
+        self._flat_values[:] = array
 
     def get_values(self):
         """Return a copy of the flat value buffer."""
