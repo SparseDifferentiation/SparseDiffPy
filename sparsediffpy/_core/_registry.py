@@ -10,10 +10,8 @@ Modelled after DNLP's registry.py.
 import numpy as np
 
 from sparsediffpy import _sparsediffengine as _C
-from sparsediffpy._core._constants import Constant, SparseConstant
 from sparsediffpy._core._nodes_affine import (
-    Add, Broadcast, DiagVec, HStack, Index, LeftMatMul, Neg,
-    ParamScalarMult, ParamVectorMult, Reshape, RightMatMul, Sum, Trace,
+    Add, Broadcast, DiagVec, HStack, Index, Neg, Reshape, Sum, Trace,
     Transpose,
 )
 from sparsediffpy._core._nodes_bivariate import (
@@ -26,7 +24,6 @@ from sparsediffpy._core._nodes_elementwise import (
 from sparsediffpy._core._nodes_other import (
     Prod, ProdAxisOne, ProdAxisZero, QuadForm,
 )
-from sparsediffpy._core._scope import Parameter
 
 
 # ---------------------------------------------------------------------------
@@ -38,8 +35,7 @@ def make_sparse_left_matmul(param_node, child_cap, matrix):
     return _C.make_left_matmul(
         param_node, child_cap, "sparse",
         matrix._csr_data, matrix._csr_indices, matrix._csr_indptr,
-        matrix.shape[0], matrix.shape[1],
-    )
+        matrix.shape[0], matrix.shape[1])
 
 
 def make_dense_left_matmul(param_node, child_cap, A_flat, m, n):
@@ -112,10 +108,13 @@ def convert_rel_entr(node, child_caps):
 
 
 def convert_quad_form(node, child_caps):
+    Q = node.Q
     return _C.make_quad_form(
         child_caps[0],
-        node.Q_csr_data, node.Q_csr_indices, node.Q_csr_indptr,
-        node.Q_shape[0], node.Q_shape[1],
+        np.asarray(Q.data, dtype=np.float64),
+        np.asarray(Q.indices, dtype=np.int32),
+        np.asarray(Q.indptr, dtype=np.int32),
+        Q.shape[0], Q.shape[1],
     )
 
 

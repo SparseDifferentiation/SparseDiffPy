@@ -36,24 +36,25 @@ class MatMul(Expression):
 
 
 class QuadOverLin(Expression):
-    """sum(x^2) / z where z is a scalar variable.
+    """sum(x^2) / z where both x and z are plain Variables.
 
-    z must be a plain Variable and must not appear in x.
+    z must be scalar and must not appear in x.
     """
     def __init__(self, x, z):
-        if not is_scalar(z.shape):
-            raise ValueError(f"quad_over_lin: z must be scalar, got shape {z.shape}")
         from sparsediffpy._core._scope import Variable
+        if not isinstance(x, Variable):
+            raise ValueError(
+                "quad_over_lin: x (first argument) must be a plain Variable."
+            )
         if not isinstance(z, Variable):
             raise ValueError(
-                "quad_over_lin: z (second argument) must be a plain Variable. "
-                "The C engine requires this — compositions like quad_over_lin(x, f(y)) "
-                "are not supported."
+                "quad_over_lin: z (second argument) must be a plain scalar Variable."
             )
+        if not is_scalar(z.shape):
+            raise ValueError(f"quad_over_lin: z must be scalar, got {z.shape}")
         if _expr_contains_variable(x, z):
             raise ValueError(
-                "quad_over_lin: the denominator variable z must not appear in "
-                "the numerator x. Use separate variables for numerator and denominator."
+                "quad_over_lin: z must not appear in x."
             )
         self.x = x
         self.z = z

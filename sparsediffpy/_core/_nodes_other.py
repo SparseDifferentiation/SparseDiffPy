@@ -4,13 +4,10 @@ from sparsediffpy._core._expression import Expression
 
 
 class QuadForm(Expression):
-    """x' Q x where Q is a constant sparse matrix."""
-    def __init__(self, child, Q_csr_data, Q_csr_indices, Q_csr_indptr, Q_shape):
+    """x' Q x where Q is a constant CSR sparse matrix."""
+    def __init__(self, child, Q):
         self.child = child
-        self.Q_csr_data = Q_csr_data
-        self.Q_csr_indices = Q_csr_indices
-        self.Q_csr_indptr = Q_csr_indptr
-        self.Q_shape = Q_shape
+        self.Q = Q
         self.shape = (1, 1)
 
 

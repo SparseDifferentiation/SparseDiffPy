@@ -82,13 +82,13 @@ class TestAtomValidation:
     def test_quad_form_wrong_Q_size(self, scope):
         x = scope.Variable(3, 1)
         Q = np.eye(4)
-        with pytest.raises(ValueError, match="doesn't match"):
+        with pytest.raises(ValueError, match="need x"):
             sp.quad_form(x, Q)
 
     def test_quad_form_non_column(self, scope):
         x = scope.Variable(1, 3)
         Q = np.eye(3)
-        with pytest.raises(ValueError, match="column vector"):
+        with pytest.raises(ValueError, match="need x"):
             sp.quad_form(x, Q)
 
     def test_pow_non_numeric_exponent(self, scope):
@@ -97,23 +97,23 @@ class TestAtomValidation:
             x ** "two"
 
     def test_hstack_empty(self):
-        with pytest.raises(ValueError, match="at least one"):
+        with pytest.raises(ValueError, match="empty argument"):
             sp.hstack([])
 
     def test_vstack_empty(self):
-        with pytest.raises(ValueError, match="at least one"):
+        with pytest.raises(ValueError, match="empty argument"):
             sp.vstack([])
 
     def test_hstack_mismatched_rows(self, scope):
         x = scope.Variable(3, 1)
         y = scope.Variable(2, 1)
-        with pytest.raises(ValueError, match="same number of rows"):
+        with pytest.raises(ValueError, match="row mismatch"):
             sp.hstack([x, y])
 
     def test_vstack_mismatched_cols(self, scope):
         X = scope.Variable(3, 2)
         Y = scope.Variable(3, 3)
-        with pytest.raises(ValueError, match="same number of columns"):
+        with pytest.raises(ValueError, match="column mismatch"):
             sp.vstack([X, Y])
 
     def test_restricted_domain_on_index(self, scope):
@@ -130,25 +130,24 @@ class TestAtomValidation:
         with pytest.raises(ValueError, match="cannot be applied directly"):
             sp.entr(x[1:3])
 
-    def test_quad_over_lin_z_must_be_variable(self, scope):
+    def test_quad_over_lin_args_must_be_variables(self, scope):
         x = scope.Variable(3, 1)
         z = scope.Variable(1, 1)
-        # This should work — z is a plain variable, not in numerator
+        # This should work — both are plain variables
         sp.quad_over_lin(x, z)
 
-        # This should fail — z is an expression, not a plain variable
-        with pytest.raises(ValueError, match="must be a plain Variable"):
+        # x is a composition — fails
+        with pytest.raises(ValueError, match="x.*must be a plain Variable"):
+            sp.quad_over_lin(sp.sin(x), z)
+
+        # z is a composition — fails
+        with pytest.raises(ValueError, match="z.*must be a plain"):
             sp.quad_over_lin(x, sp.exp(z))
 
-    def test_quad_over_lin_z_not_in_numerator(self, scope):
-        x = scope.Variable(3, 1)
+    def test_quad_over_lin_z_not_in_x(self, scope):
         z = scope.Variable(1, 1)
-        # z appears in numerator via broadcast: x + z
-        with pytest.raises(ValueError, match="denominator variable z must not appear in the numerator"):
-            sp.quad_over_lin(x + z, z)
-
-        # z appears directly as scalar in numerator
-        with pytest.raises(ValueError, match="denominator variable z must not appear in the numerator"):
+        # z used as both args
+        with pytest.raises(ValueError, match="z must not appear in x"):
             sp.quad_over_lin(z, z)
 
     def test_prod_must_be_variable(self, scope):

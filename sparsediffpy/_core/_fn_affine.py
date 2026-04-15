@@ -30,8 +30,14 @@ def sum(x, axis=None):
     axis=0: sum along rows (collapse d1) -> (1, d2)
     axis=1: sum along columns (collapse d2) -> (1, d1)
     """
-    c_axis = -1 if axis is None else axis
-    return Sum(x, c_axis)
+    if axis is None:
+        return Sum(x, -1)
+    elif axis == 0:
+        return Sum(x, 0)
+    elif axis == 1:
+        return Sum(x, 1)
+    else:
+        raise ValueError(f"Invalid axis {axis}, must be None, 0, or 1")
 
 
 def prod(x, axis=None):
@@ -58,15 +64,12 @@ def hstack(expressions):
     """
     exprs = [_wrap_constant(e) for e in expressions]
     if not exprs:
-        raise ValueError("hstack requires at least one expression")
+        raise ValueError("hstack: empty argument")
 
     d1 = exprs[0].shape[0]
     for e in exprs[1:]:
         if e.shape[0] != d1:
-            raise ValueError(
-                f"hstack: all expressions must have the same number of rows, "
-                f"got {d1} and {e.shape[0]}"
-            )
+            raise ValueError(f"hstack: row mismatch, {d1} vs {e.shape[0]}")
 
     total_d2 = _builtin_sum(e.shape[1] for e in exprs)
     return HStack(exprs, (d1, total_d2))
@@ -79,15 +82,12 @@ def vstack(expressions):
     """
     exprs = [_wrap_constant(e) for e in expressions]
     if not exprs:
-        raise ValueError("vstack requires at least one expression")
+        raise ValueError("vstack: empty argument")
 
     d2 = exprs[0].shape[1]
     for e in exprs[1:]:
         if e.shape[1] != d2:
-            raise ValueError(
-                f"vstack: all expressions must have the same number of columns, "
-                f"got {d2} and {e.shape[1]}"
-            )
+            raise ValueError(f"vstack: column mismatch, {d2} vs {e.shape[1]}")
 
     transposed = [Transpose(e) for e in exprs]
     total_d1 = _builtin_sum(e.shape[0] for e in exprs)
