@@ -302,11 +302,6 @@ class CompiledExpression:
 
         Must be called before jacobian() or hessian().
         """
-
-        # TODO: we want to refactor the c engine so the forward does not 
-        # depend on jacobian being initialized. I think that's only for one or 
-        # two atoms, if I recall correctly. Then we can remove this call. 
-        self._ensure_jacobian_initialized()
         self._sync_params()
         return _C.expr_forward(self._expr, self._scope._flat_values)
 
@@ -317,6 +312,9 @@ class CompiledExpression:
 
         Returns scipy.sparse.csr_matrix of shape (expr_size, n_vars).
         """
+        if not self._jacobian_initialized:
+            _C.expr_init_jacobian(self._expr)
+            self._jacobian_initialized = True
         data, indices, indptr, (m, n) = _C.expr_jacobian(self._expr)
         return scipy.sparse.csr_matrix((data, indices, indptr), shape=(m, n))
 
