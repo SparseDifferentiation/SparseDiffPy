@@ -24,6 +24,9 @@ from sparsediffpy._core._expression import Expression  # noqa: F401
 # Compile
 from sparsediffpy._core._compile import compile  # noqa: F401
 
+# Problem
+from sparsediffpy._core._problem import Problem  # noqa: F401
+
 # Elementwise functions
 from sparsediffpy._core._fn_elementwise import (  # noqa: F401
     sin, cos, exp, log, tan, sinh, tanh, asinh, atanh,
