@@ -7,6 +7,7 @@
 #include "atoms/asinh.h"
 #include "atoms/atanh.h"
 #include "atoms/broadcast.h"
+#include "atoms/convolve.h"
 #include "atoms/cos.h"
 #include "atoms/diag_mat.h"
 #include "atoms/diag_vec.h"
@@ -91,6 +92,8 @@ static PyMethodDef DNLPMethods[] = {
     {"make_promote", py_make_promote, METH_VARARGS, "Create promote node"},
     {"make_multiply", py_make_multiply, METH_VARARGS,
      "Create elementwise multiply node"},
+    {"make_convolve", py_make_convolve, METH_VARARGS,
+     "Create 1D full convolution node: y = conv(kernel_param, child)"},
     {"make_matmul", py_make_matmul, METH_VARARGS,
      "Create matrix multiplication node (Z = X @ Y)"},
     {"make_param_scalar_mult", py_make_param_scalar_mult, METH_VARARGS,
