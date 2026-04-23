@@ -119,7 +119,8 @@ static PyObject *py_make_left_matmul(PyObject *self, PyObject *args)
     }
     else if (strcmp(fmt, "dense") == 0)
     {
-        /* Parse: param_or_none, child, "dense", A_data_flat, m, n */
+        /* Engine requires (param_node, data) to be mutually exclusive;
+         * drop the caller's A_data when a parameter capsule is supplied. */
         PyObject *data_obj;
         int m, n;
         if (!PyArg_ParseTuple(args, "OOsOii", &param_obj, &child_capsule,
@@ -128,48 +129,34 @@ static PyObject *py_make_left_matmul(PyObject *self, PyObject *args)
             return NULL;
         }
 
-        PyArrayObject *data_array = (PyArrayObject *) PyArray_FROM_OTF(
-            data_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
-        if (!data_array)
-        {
-            return NULL;
-        }
-
-        double *A_data = (double *) PyArray_DATA(data_array);
-
-        expr *param_node = NULL;
+        expr *node;
         if (param_obj == Py_None)
         {
-            param_node = new_parameter(m * n, 1, PARAM_FIXED,
-                                       child->n_vars, A_data);
-            if (!param_node)
+            PyArrayObject *data_array = (PyArrayObject *) PyArray_FROM_OTF(
+                data_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+            if (!data_array)
             {
-                Py_DECREF(data_array);
-                PyErr_SetString(PyExc_RuntimeError,
-                                "failed to create parameter node");
                 return NULL;
             }
+            double *A_data = (double *) PyArray_DATA(data_array);
+            node = new_left_matmul_dense(NULL, child, m, n, A_data);
+            Py_DECREF(data_array);
         }
         else
         {
-            param_node = (expr *) PyCapsule_GetPointer(param_obj,
-                                                       EXPR_CAPSULE_NAME);
+            expr *param_node = (expr *) PyCapsule_GetPointer(
+                param_obj, EXPR_CAPSULE_NAME);
             if (!param_node)
             {
-                Py_DECREF(data_array);
                 PyErr_SetString(PyExc_ValueError,
                                 "invalid parameter capsule");
                 return NULL;
             }
+            node = new_left_matmul_dense(param_node, child, m, n, NULL);
         }
-
-        expr *node =
-            new_left_matmul_dense(param_node, child, m, n, A_data);
-        Py_DECREF(data_array);
 
         if (!node)
         {
-            if (param_obj == Py_None) free_expr(param_node);
             PyErr_SetString(PyExc_RuntimeError,
                             "failed to create dense left_matmul node");
             return NULL;
