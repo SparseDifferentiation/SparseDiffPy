@@ -119,13 +119,8 @@ static PyObject *py_make_left_matmul(PyObject *self, PyObject *args)
     }
     else if (strcmp(fmt, "dense") == 0)
     {
-        /* Parse: param_or_none, child, "dense", A_data_flat, m, n.
-         *
-         * The engine's new_left_matmul_dense convention requires exactly
-         * one of param_node / data to be non-NULL: constants pass
-         * (NULL, data); parameters pass (capsule, NULL). DNLP always
-         * hands in a flat A for both cases, so when a parameter capsule
-         * is supplied we ignore the A_data payload. */
+        /* Engine requires (param_node, data) to be mutually exclusive;
+         * drop the caller's A_data when a parameter capsule is supplied. */
         PyObject *data_obj;
         int m, n;
         if (!PyArg_ParseTuple(args, "OOsOii", &param_obj, &child_capsule,
