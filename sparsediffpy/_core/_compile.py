@@ -297,6 +297,32 @@ class CompiledExpression:
             _C.expr_init_jacobian(self._expr)
             self._jacobian_initialized = True
 
+    def init_jacobian(self):
+        """Pre-compute the Jacobian sparsity pattern.
+
+        Optional: jacobian() will call this lazily on first use. Calling it
+        explicitly lets you pay the sparsity-analysis cost up front, which is
+        useful when you want predictable per-iteration latency in a solver
+        loop or when benchmarking the eval phase in isolation.
+
+        Idempotent.
+        """
+        if not self._jacobian_initialized:
+            _C.expr_init_jacobian(self._expr)
+            self._jacobian_initialized = True
+
+    def init_hessian(self):
+        """Pre-compute the Hessian sparsity pattern.
+
+        Optional: hessian() will call this lazily on first use. See
+        init_jacobian() for when to call this explicitly.
+
+        Idempotent.
+        """
+        if not self._hessian_initialized:
+            _C.expr_init_hessian(self._expr)
+            self._hessian_initialized = True
+
     def forward(self):
         """Evaluate the expression at the current variable values.
 

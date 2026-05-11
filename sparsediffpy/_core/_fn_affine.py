@@ -2,9 +2,11 @@
 
 import builtins as _builtins
 
+import numpy as np
+
 from sparsediffpy._core._expression import _wrap_constant
 from sparsediffpy._core._nodes_affine import (
-    DiagVec, HStack, Reshape, Sum, Trace, Transpose,
+    Broadcast, DiagVec, HStack, Index, Reshape, Sum, Trace, Transpose,
 )
 from sparsediffpy._core._nodes_other import Prod, ProdAxisOne, ProdAxisZero
 from sparsediffpy._core._shapes import validate_shape
@@ -21,6 +23,36 @@ def trace(x):
 def reshape(x, d1, d2):
     validate_shape(d1, d2)
     return Reshape(x, (d1, d2))
+
+
+def broadcast(x, shape):
+    """Broadcast a scalar or smaller-shaped expression to `shape`.
+
+    If `x.shape == shape`, returns `x` unchanged.
+    """
+    x = _wrap_constant(x)
+    shape = tuple(shape)
+    validate_shape(shape[0], shape[1])
+    if x.shape == shape:
+        return x
+    return Broadcast(x, shape)
+
+
+def index_flat(x, flat_indices, result_shape):
+    """Gather elements by pre-computed Fortran-flat indices into `x`.
+
+    `flat_indices` is an array of column-major indices into `x` (treated as a
+    flat buffer of size d1*d2). `result_shape` is the 2-D shape of the output.
+    """
+    flat_indices = np.asarray(flat_indices, dtype=np.int32)
+    result_shape = tuple(result_shape)
+    validate_shape(result_shape[0], result_shape[1])
+    if flat_indices.size != result_shape[0] * result_shape[1]:
+        raise ValueError(
+            f"flat_indices length {flat_indices.size} does not match "
+            f"result_shape {result_shape} (size {result_shape[0] * result_shape[1]})"
+        )
+    return Index(x, flat_indices, result_shape)
 
 
 def sum(x, axis=None):

@@ -35,7 +35,7 @@ from sparsediffpy._core._fn_elementwise import (  # noqa: F401
 
 # Affine / structural functions
 from sparsediffpy._core._fn_affine import (  # noqa: F401
-    diag_vec, trace, reshape, sum, prod, hstack, vstack,
+    broadcast, diag_vec, hstack, index_flat, prod, reshape, sum, trace, vstack,
 )
 
 # Bivariate / special functions
