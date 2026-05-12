@@ -33,7 +33,7 @@ static PyObject *py_problem_jacobian(PyObject *self, PyObject *args)
 
     problem_jacobian(prob);
 
-    CSR_Matrix *jac = prob->jacobian;
+    CSR_matrix *jac = prob->jacobian;
     npy_intp nnz = jac->nnz;
     npy_intp m_plus_1 = jac->m + 1;
 
@@ -79,7 +79,7 @@ static PyObject *py_get_jacobian(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    CSR_Matrix *jac = prob->jacobian;
+    CSR_matrix *jac = prob->jacobian;
     npy_intp nnz = jac->nnz;
     npy_intp m_plus_1 = jac->m + 1;
 
@@ -163,7 +163,7 @@ static PyObject *py_problem_eval_jacobian_vals(PyObject *self, PyObject *args)
 
     problem_jacobian(prob);
 
-    CSR_Matrix *jac = prob->jacobian;
+    CSR_matrix *jac = prob->jacobian;
     npy_intp nnz = jac->nnz;
 
     PyObject *data = PyArray_SimpleNew(1, &nnz, NPY_DOUBLE);

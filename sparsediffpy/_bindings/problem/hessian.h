@@ -13,7 +13,7 @@
  * total_constraint_size)
  *
  * Returns:
- *   Tuple of (data, indices, indptr, (m, n)) for scipy.sparse.csr_matrix
+ *   Tuple of (data, indices, indptr, (m, n)) for scipy.sparse.CSR_matrix
  */
 static PyObject *py_problem_hessian(PyObject *self, PyObject *args)
 {
@@ -50,7 +50,7 @@ static PyObject *py_problem_hessian(PyObject *self, PyObject *args)
     Py_DECREF(lagrange_arr);
 
     /* Extract CSR components and return as tuple */
-    CSR_Matrix *H = prob->lagrange_hessian;
+    CSR_matrix *H = prob->lagrange_hessian;
     npy_intp nnz = H->nnz;
     npy_intp n_plus_1 = H->n + 1;
 
@@ -97,7 +97,7 @@ static PyObject *py_get_hessian(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    CSR_Matrix *H = prob->lagrange_hessian;
+    CSR_matrix *H = prob->lagrange_hessian;
     npy_intp nnz = H->nnz;
     npy_intp n_plus_1 = H->n + 1;
 
