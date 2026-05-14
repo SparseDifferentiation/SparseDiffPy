@@ -144,7 +144,7 @@ static PyObject *py_get_problem_hessian_sparsity_coo(PyObject *self, PyObject *a
         return NULL;
     }
 
-    COO_Matrix *coo = prob->lagrange_hessian_coo;
+    COO_matrix *coo = prob->lagrange_hessian_coo;
     npy_intp nnz = coo->nnz;
 
     PyObject *rows = PyArray_SimpleNew(1, &nnz, NPY_INT32);
@@ -201,7 +201,7 @@ static PyObject *py_problem_eval_hessian_vals_coo(PyObject *self, PyObject *args
     refresh_lower_triangular_coo(prob->lagrange_hessian_coo,
                                  prob->lagrange_hessian->x);
 
-    COO_Matrix *coo = prob->lagrange_hessian_coo;
+    COO_matrix *coo = prob->lagrange_hessian_coo;
     npy_intp nnz = coo->nnz;
 
     PyObject *data = PyArray_SimpleNew(1, &nnz, NPY_DOUBLE);

@@ -126,7 +126,7 @@ static PyObject *py_get_jacobian_sparsity_coo(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    COO_Matrix *coo = prob->jacobian_coo;
+    COO_matrix *coo = prob->jacobian_coo;
     npy_intp nnz = coo->nnz;
 
     PyObject *rows = PyArray_SimpleNew(1, &nnz, NPY_INT32);
