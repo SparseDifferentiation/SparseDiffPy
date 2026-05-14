@@ -95,7 +95,7 @@ static PyObject *py_make_left_matmul(PyObject *self, PyObject *args)
             }
         }
 
-        CSR_Matrix *A = new_csr_matrix(m, n, nnz);
+        CSR_matrix *A = new_CSR_matrix(m, n, nnz);
         memcpy(A->x, PyArray_DATA(data_array), nnz * sizeof(double));
         memcpy(A->i, PyArray_DATA(indices_array), nnz * sizeof(int));
         memcpy(A->p, PyArray_DATA(indptr_array), (m + 1) * sizeof(int));
@@ -105,7 +105,7 @@ static PyObject *py_make_left_matmul(PyObject *self, PyObject *args)
         Py_DECREF(indptr_array);
 
         expr *node = new_left_matmul(param_node, child, A);
-        free_csr_matrix(A);
+        free_CSR_matrix(A);
 
         if (!node)
         {

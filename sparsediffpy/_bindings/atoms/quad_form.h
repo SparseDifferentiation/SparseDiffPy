@@ -40,7 +40,7 @@ static PyObject *py_make_quad_form(PyObject *self, PyObject *args)
     }
 
     int nnz = (int) PyArray_SIZE(data_array);
-    CSR_Matrix *Q = new_csr_matrix(m, n, nnz);
+    CSR_matrix *Q = new_CSR_matrix(m, n, nnz);
     memcpy(Q->x, PyArray_DATA(data_array), nnz * sizeof(double));
     memcpy(Q->i, PyArray_DATA(indices_array), nnz * sizeof(int));
     memcpy(Q->p, PyArray_DATA(indptr_array), (m + 1) * sizeof(int));
@@ -50,7 +50,7 @@ static PyObject *py_make_quad_form(PyObject *self, PyObject *args)
     Py_DECREF(indptr_array);
 
     expr *node = new_quad_form(child, Q);
-    free_csr_matrix(Q);
+    free_CSR_matrix(Q);
 
     if (!node)
     {

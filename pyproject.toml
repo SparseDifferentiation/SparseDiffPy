@@ -5,7 +5,7 @@ build-backend = "scikit_build_core.build"
 [project]
 name = "sparsediffpy"
 version = "0.3.0"
-description = "Python bindings for SparseDiffEngine automatic differentiation"
+description = "Python bindings for SparseDiffEngine algorithmic differentiation"
 requires-python = ">=3.11"
 dependencies = ["numpy >= 2.0.0"]
 license = "Apache-2.0"
