@@ -90,7 +90,7 @@ static PyObject *py_make_quad_form(PyObject *self, PyObject *args)
         Py_DECREF(indices_array);
         Py_DECREF(indptr_array);
 
-        expr *node = new_quad_form(child, Q);
+        expr *node = new_quad_form_sparse(child, Q);
         free_CSR_matrix(Q);
 
         if (!node)
