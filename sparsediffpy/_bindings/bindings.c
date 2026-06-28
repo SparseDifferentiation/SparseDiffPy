@@ -16,6 +16,7 @@
 #include "atoms/getters.h"
 #include "atoms/hstack.h"
 #include "atoms/index.h"
+#include "atoms/kron.h"
 #include "atoms/left_matmul.h"
 #include "atoms/log.h"
 #include "atoms/logistic.h"
@@ -94,6 +95,8 @@ static PyMethodDef DNLPMethods[] = {
      "Create elementwise multiply node"},
     {"make_convolve", py_make_convolve, METH_VARARGS,
      "Create 1D full convolution node: y = conv(kernel_param, child)"},
+    {"make_kron", py_make_kron, METH_VARARGS,
+     "Create Kronecker product node: Z = kron(A, B)"},
     {"make_matmul", py_make_matmul, METH_VARARGS,
      "Create matrix multiplication node (Z = X @ Y)"},
     {"make_param_scalar_mult", py_make_param_scalar_mult, METH_VARARGS,
