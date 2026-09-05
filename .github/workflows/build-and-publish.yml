@@ -33,12 +33,15 @@ jobs:
         os: [ ubuntu-22.04, macos-14, windows-2022 ]
         python-version: [ "3.11", "3.12", "3.13", "3.14" ]
         # "" builds the default (GIL) interpreter, "t" the free-threaded one.
-        # Free-threaded CPython exists from 3.13 onwards.
+        # Only 3.14t: NumPy >= 2.5 ships no cp313t wheels on any platform, so a
+        # 3.13t build would have to compile NumPy from source.
         abi: [ "", "t" ]
         exclude:
           - python-version: "3.11"
             abi: "t"
           - python-version: "3.12"
+            abi: "t"
+          - python-version: "3.13"
             abi: "t"
 
     env:
@@ -86,8 +89,8 @@ jobs:
       - name: Check wheels
         shell: bash
         run: |
-          pip install --upgrade twine
-          twine check wheelhouse/*
+          python -m pip install --upgrade twine
+          python -m twine check wheelhouse/*
 
       - uses: actions/upload-artifact@v4
         with:

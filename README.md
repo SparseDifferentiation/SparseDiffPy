@@ -16,8 +16,9 @@ from sparsediffpy import _sparsediffengine
 
 ## Free-threaded Python
 
-Wheels are published for the free-threaded CPython builds (`cp313t`, `cp314t`) as
-well as the default ones. The extension declares that it does not need the GIL:
+Wheels are published for free-threaded CPython 3.14 (`cp314t`) as well as the
+default builds. There is no 3.13t wheel because NumPy 2.5 and later ship no
+`cp313t` wheels. The extension declares that it does not need the GIL:
 the engine keeps no global mutable state, every problem and expression owns its
 own buffers, and all inputs and outputs are copied at the boundary. Distinct
 problems can therefore be built and evaluated concurrently from different
