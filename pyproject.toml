@@ -16,6 +16,7 @@ content-type = "text/markdown"
 
 [tool.scikit-build]
 cmake.version = ">=3.15"
+cmake.build-type = "Release"
 wheel.packages = ["sparsediffpy"]
 # Persistent build dir: avoids scikit-build-core's TemporaryDirectory, whose cleanup
 # intermittently fails on Windows CI with WinError 32 (lingering mspdbsrv/AV handle).
