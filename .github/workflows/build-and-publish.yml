@@ -32,6 +32,17 @@ jobs:
       matrix:
         os: [ ubuntu-22.04, macos-14, windows-2022 ]
         python-version: [ "3.11", "3.12", "3.13", "3.14" ]
+        # "" builds the default (GIL) interpreter, "t" the free-threaded one.
+        # Only 3.14t: NumPy >= 2.5 ships no cp313t wheels on any platform, so a
+        # 3.13t build would have to compile NumPy from source.
+        abi: [ "", "t" ]
+        exclude:
+          - python-version: "3.11"
+            abi: "t"
+          - python-version: "3.12"
+            abi: "t"
+          - python-version: "3.13"
+            abi: "t"
 
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
@@ -60,7 +71,10 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.3.0
         env:
-          CIBW_BUILD: "cp3${{ env.PYTHON_SUBVERSION }}-*"
+          CIBW_BUILD: "cp3${{ env.PYTHON_SUBVERSION }}${{ matrix.abi }}-*"
+          # Opt in to cp3XXt build identifiers; harmless for the GIL builds since
+          # CIBW_BUILD already selects a single ABI.
+          CIBW_ENABLE: "cpython-freethreading"
           CIBW_SKIP: "*-win32 *-manylinux_i686 *-musllinux*"
           CIBW_ARCHS_MACOS: "x86_64 universal2"
           CIBW_ARCHS_LINUX: "auto aarch64"
@@ -69,16 +83,18 @@ jobs:
           CIBW_ENVIRONMENT_WINDOWS: "CMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
           # Bundle openblas.dll into the wheel (auditwheel/delocate handle this on Linux/macOS)
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: "delvewheel repair -w {dest_dir} {wheel} --add-path C:/vcpkg/installed/x64-windows/bin"
-          CIBW_TEST_COMMAND: python -c "import sparsediffpy"
+          # On free-threaded builds also assert the import did not re-enable the GIL,
+          # i.e. the extension really declares Py_MOD_GIL_NOT_USED.
+          CIBW_TEST_COMMAND: python -c "import sys, sysconfig, sparsediffpy; ft = sysconfig.get_config_var('Py_GIL_DISABLED') == 1; assert not ft or not sys._is_gil_enabled(), 'GIL re-enabled on import'"
       - name: Check wheels
         shell: bash
         run: |
-          pip install --upgrade twine
-          twine check wheelhouse/*
+          python -m pip install --upgrade twine
+          python -m twine check wheelhouse/*
 
       - uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}-${{ matrix.python-version }}
+          name: wheels-${{ matrix.os }}-${{ matrix.python-version }}${{ matrix.abi }}
           path: ./wheelhouse/*.whl
 
   build_sdist:

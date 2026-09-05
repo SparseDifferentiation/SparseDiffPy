@@ -187,5 +187,17 @@ static struct PyModuleDef sparsediffpy_module = {
 PyMODINIT_FUNC PyInit__sparsediffengine(void)
 {
     if (ensure_numpy() < 0) return NULL;
-    return PyModule_Create(&sparsediffpy_module);
+    PyObject *module = PyModule_Create(&sparsediffpy_module);
+    if (!module) return NULL;
+#ifdef Py_GIL_DISABLED
+    /* Free-threaded CPython (3.13t+): declare that this module does not need
+       the GIL. The engine keeps no global mutable state -- every problem and
+       expression owns its own buffers, and the wrappers copy inputs and
+       outputs -- so distinct problems may be used concurrently from different
+       threads. A single problem or expression capsule is not thread-safe and
+       must not be used from two threads at once (same contract as with the
+       GIL, which never protected against interleaved calls on one object). */
+    PyUnstable_Module_SetGIL(module, Py_MOD_GIL_NOT_USED);
+#endif
+    return module;
 }
