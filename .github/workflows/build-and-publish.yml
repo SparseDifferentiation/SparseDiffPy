@@ -32,17 +32,18 @@ jobs:
       matrix:
         os: [ ubuntu-22.04, macos-14, windows-2022 ]
         python-version: [ "3.11", "3.12", "3.13", "3.14" ]
-        # "" builds the default (GIL) interpreter, "t" the free-threaded one.
-        # Only 3.14t: NumPy >= 2.5 ships no cp313t wheels on any platform, so a
-        # 3.13t build would have to compile NumPy from source.
+        # "" builds the default interpreter, "t" the free-threaded one.
         abi: [ "", "t" ]
         exclude:
-          - python-version: "3.11"
-            abi: "t"
-          - python-version: "3.12"
-            abi: "t"
-          - python-version: "3.13"
-            abi: "t"
+          # Free threading does not exist before 3.13: cp311t and cp312t are
+          # not build identifiers at all, so cibuildwheel would select nothing
+          # and the job would fail on an empty wheelhouse.
+          - { python-version: "3.11", abi: "t" }
+          - { python-version: "3.12", abi: "t" }
+          # NumPy ships no cp313t wheels from 2.5 onwards (2.4.6 is the last
+          # release with one), so a 3.13t build would compile NumPy from
+          # source: that timed out under QEMU and failed outright on macOS.
+          - { python-version: "3.13", abi: "t" }
 
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
@@ -71,10 +72,9 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.3.0
         env:
+          # No CIBW_ENABLE needed: cibuildwheel 3.x gates only cp313t behind
+          # cpython-freethreading, and cp314t is selectable by default.
           CIBW_BUILD: "cp3${{ env.PYTHON_SUBVERSION }}${{ matrix.abi }}-*"
-          # Opt in to cp3XXt build identifiers; harmless for the GIL builds since
-          # CIBW_BUILD already selects a single ABI.
-          CIBW_ENABLE: "cpython-freethreading"
           CIBW_SKIP: "*-win32 *-manylinux_i686 *-musllinux*"
           CIBW_ARCHS_MACOS: "x86_64 universal2"
           CIBW_ARCHS_LINUX: "auto aarch64"
@@ -83,9 +83,9 @@ jobs:
           CIBW_ENVIRONMENT_WINDOWS: "CMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
           # Bundle openblas.dll into the wheel (auditwheel/delocate handle this on Linux/macOS)
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: "delvewheel repair -w {dest_dir} {wheel} --add-path C:/vcpkg/installed/x64-windows/bin"
-          # On free-threaded builds also assert the import did not re-enable the GIL,
-          # i.e. the extension really declares Py_MOD_GIL_NOT_USED.
-          CIBW_TEST_COMMAND: python -c "import sys, sysconfig, sparsediffpy; ft = sysconfig.get_config_var('Py_GIL_DISABLED') == 1; assert not ft or not sys._is_gil_enabled(), 'GIL re-enabled on import'"
+          # On free-threaded builds also assert the import did not re-enable the
+          # GIL, i.e. the extension really declares Py_MOD_GIL_NOT_USED.
+          CIBW_TEST_COMMAND: python -c "import sys, sysconfig, sparsediffpy; ft = bool(sysconfig.get_config_var('Py_GIL_DISABLED')); assert not ft or not sys._is_gil_enabled(), 'GIL re-enabled on import'; print('freethreaded_build=', ft)"
       - name: Check wheels
         shell: bash
         run: |
