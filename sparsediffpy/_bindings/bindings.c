@@ -191,12 +191,25 @@ PyMODINIT_FUNC PyInit__sparsediffengine(void)
     if (!module) return NULL;
 #ifdef Py_GIL_DISABLED
     /* Free-threaded CPython (3.13t+): declare that this module does not need
-       the GIL. The engine keeps no global mutable state -- every problem and
-       expression owns its own buffers, and the wrappers copy inputs and
-       outputs -- so distinct problems may be used concurrently from different
-       threads. A single problem or expression capsule is not thread-safe and
-       must not be used from two threads at once (same contract as with the
-       GIL, which never protected against interleaved calls on one object). */
+       the GIL.
+
+       This holds only for an engine built WITHOUT SP_TRACK_MEMORY, which is
+       the default. With that option on, every sp_malloc / sp_free updates the
+       g_allocated_bytes and g_peak_bytes process globals non-atomically, so
+       two threads that merely allocate would race. Never enable it for a
+       wheel build.
+
+       Otherwise the engine keeps no mutable global state: every problem and
+       expression owns its buffers, and the wrappers copy inputs and outputs,
+       so distinct problems may be built and evaluated concurrently.
+
+       A single problem or expression capsule remains NOT thread-safe, and
+       without the GIL the consequence is harsher than it used to be.
+       expr::refcount is a plain int that expr_retain() and free_expr() update
+       non-atomically, and capsule destructors run on whichever thread drops
+       the last Python reference. Sharing one capsule across threads therefore
+       corrupts the heap rather than merely interleaving calls. Making that
+       count atomic upstream would remove the sharp edge. */
     PyUnstable_Module_SetGIL(module, Py_MOD_GIL_NOT_USED);
 #endif
     return module;
