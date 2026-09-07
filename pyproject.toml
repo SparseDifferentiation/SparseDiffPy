@@ -15,10 +15,7 @@ file = "README.md"
 content-type = "text/markdown"
 
 [tool.scikit-build]
-# CMake 3.30 is the first whose FindPython3 understands the free-threaded ("t")
-# ABI, and scikit-build-core only sends the Python3_FIND_ABI hint when this
-# specifier admits 3.30+. 3.30.3 adds the Python3_DEFINITIONS a Windows
-# free-threaded build needs to link python3XXt.lib.
+# 3.30.3+ so FindPython3 detects the free-threaded ABI on all platforms.
 cmake.version = ">=3.30.3"
 cmake.build-type = "Release"
 wheel.packages = ["sparsediffpy"]

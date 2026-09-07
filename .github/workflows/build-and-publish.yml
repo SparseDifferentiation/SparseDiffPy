@@ -35,14 +35,10 @@ jobs:
         # "" builds the default interpreter, "t" the free-threaded one.
         abi: [ "", "t" ]
         exclude:
-          # Free threading does not exist before 3.13: cp311t and cp312t are
-          # not build identifiers at all, so cibuildwheel would select nothing
-          # and the job would fail on an empty wheelhouse.
+          # Free threading starts at 3.13, so cp311t / cp312t do not exist.
           - { python-version: "3.11", abi: "t" }
           - { python-version: "3.12", abi: "t" }
-          # NumPy ships no cp313t wheels from 2.5 onwards (2.4.6 is the last
-          # release with one), so a 3.13t build would compile NumPy from
-          # source: that timed out under QEMU and failed outright on macOS.
+          # No cp313t NumPy wheels from 2.5 on; it would build from source.
           - { python-version: "3.13", abi: "t" }
 
     env:
@@ -72,8 +68,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v3.3.0
         env:
-          # No CIBW_ENABLE needed: cibuildwheel 3.x gates only cp313t behind
-          # cpython-freethreading, and cp314t is selectable by default.
+          # cp314t needs no CIBW_ENABLE; cibuildwheel gates only cp313t.
           CIBW_BUILD: "cp3${{ env.PYTHON_SUBVERSION }}${{ matrix.abi }}-*"
           CIBW_SKIP: "*-win32 *-manylinux_i686 *-musllinux*"
           CIBW_ARCHS_MACOS: "x86_64 universal2"
@@ -83,8 +78,7 @@ jobs:
           CIBW_ENVIRONMENT_WINDOWS: "CMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
           # Bundle openblas.dll into the wheel (auditwheel/delocate handle this on Linux/macOS)
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: "delvewheel repair -w {dest_dir} {wheel} --add-path C:/vcpkg/installed/x64-windows/bin"
-          # On free-threaded builds also assert the import did not re-enable the
-          # GIL, i.e. the extension really declares Py_MOD_GIL_NOT_USED.
+          # On free-threaded builds, assert the import did not re-enable the GIL.
           CIBW_TEST_COMMAND: python -c "import sys, sysconfig, sparsediffpy; ft = bool(sysconfig.get_config_var('Py_GIL_DISABLED')); assert not ft or not sys._is_gil_enabled(), 'GIL re-enabled on import'; print('freethreaded_build=', ft)"
       - name: Check wheels
         shell: bash

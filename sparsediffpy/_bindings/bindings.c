@@ -190,26 +190,11 @@ PyMODINIT_FUNC PyInit__sparsediffengine(void)
     PyObject *module = PyModule_Create(&sparsediffpy_module);
     if (!module) return NULL;
 #ifdef Py_GIL_DISABLED
-    /* Free-threaded CPython (3.13t+): declare that this module does not need
-       the GIL.
-
-       This holds only for an engine built WITHOUT SP_TRACK_MEMORY, which is
-       the default. With that option on, every sp_malloc / sp_free updates the
-       g_allocated_bytes and g_peak_bytes process globals non-atomically, so
-       two threads that merely allocate would race. Never enable it for a
-       wheel build.
-
-       Otherwise the engine keeps no mutable global state: every problem and
-       expression owns its buffers, and the wrappers copy inputs and outputs,
-       so distinct problems may be built and evaluated concurrently.
-
-       A single problem or expression capsule remains NOT thread-safe, and
-       without the GIL the consequence is harsher than it used to be.
-       expr::refcount is a plain int that expr_retain() and free_expr() update
-       non-atomically, and capsule destructors run on whichever thread drops
-       the last Python reference. Sharing one capsule across threads therefore
-       corrupts the heap rather than merely interleaving calls. Making that
-       count atomic upstream would remove the sharp edge. */
+    /* Requires an engine built without SP_TRACK_MEMORY (the default), which
+       leaves no mutable global state, so distinct problems are independent.
+       A single problem or expression capsule is still single-threaded:
+       expr::refcount is a plain int, so sharing one across threads corrupts
+       the heap. See README.md. */
     PyUnstable_Module_SetGIL(module, Py_MOD_GIL_NOT_USED);
 #endif
     return module;
