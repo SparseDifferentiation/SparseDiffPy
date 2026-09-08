@@ -187,5 +187,15 @@ static struct PyModuleDef sparsediffpy_module = {
 PyMODINIT_FUNC PyInit__sparsediffengine(void)
 {
     if (ensure_numpy() < 0) return NULL;
-    return PyModule_Create(&sparsediffpy_module);
+    PyObject *module = PyModule_Create(&sparsediffpy_module);
+    if (!module) return NULL;
+#ifdef Py_GIL_DISABLED
+    /* Requires an engine built without SP_TRACK_MEMORY (the default), which
+       leaves no mutable global state, so distinct problems are independent.
+       A single problem or expression capsule is still single-threaded:
+       expr::refcount is a plain int, so sharing one across threads corrupts
+       the heap. See README.md. */
+    PyUnstable_Module_SetGIL(module, Py_MOD_GIL_NOT_USED);
+#endif
+    return module;
 }

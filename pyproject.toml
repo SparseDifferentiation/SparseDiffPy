@@ -15,7 +15,8 @@ file = "README.md"
 content-type = "text/markdown"
 
 [tool.scikit-build]
-cmake.version = ">=3.15"
+# 3.30.3+ so FindPython3 detects the free-threaded ABI on all platforms.
+cmake.version = ">=3.30.3"
 cmake.build-type = "Release"
 wheel.packages = ["sparsediffpy"]
 # Persistent build dir: avoids scikit-build-core's TemporaryDirectory, whose cleanup
