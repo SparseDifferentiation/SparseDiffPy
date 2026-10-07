@@ -5,6 +5,7 @@
 /* Include atom bindings */
 #include "atoms/add.h"
 #include "atoms/asinh.h"
+#include "atoms/atan.h"
 #include "atoms/atanh.h"
 #include "atoms/broadcast.h"
 #include "atoms/convolve.h"
@@ -119,6 +120,7 @@ static PyMethodDef DNLPMethods[] = {
     {"make_sinh", py_make_sinh, METH_VARARGS, "Create sinh node"},
     {"make_tanh", py_make_tanh, METH_VARARGS, "Create tanh node"},
     {"make_asinh", py_make_asinh, METH_VARARGS, "Create asinh node"},
+    {"make_atan", py_make_atan, METH_VARARGS, "Create atan node"},
     {"make_atanh", py_make_atanh, METH_VARARGS, "Create atanh node"},
     {"make_upper_tri", py_make_upper_tri, METH_VARARGS, "Create upper_tri node"},
     {"make_broadcast", py_make_broadcast, METH_VARARGS, "Create broadcast node"},
