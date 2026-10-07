@@ -69,7 +69,9 @@ jobs:
           CIBW_ARCHS_LINUX: "auto aarch64"
           CIBW_BEFORE_BUILD_LINUX: "yum install -y openblas-devel || apt-get install -y libopenblas-dev"
           CIBW_BEFORE_BUILD_WINDOWS: "pip install delvewheel && vcpkg install openblas:x64-windows"
-          CIBW_ENVIRONMENT_WINDOWS: "CMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
+          # The engine turns MSVC /WX off under scikit-build for downstream
+          # builds; keep it on for our own wheels.
+          CIBW_ENVIRONMENT_WINDOWS: "CMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake SKBUILD_CMAKE_ARGS=-DSDE_WARNINGS_AS_ERRORS=ON"
           # Bundle openblas.dll into the wheel (auditwheel/delocate handle this on Linux/macOS)
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: "delvewheel repair -w {dest_dir} {wheel} --add-path C:/vcpkg/installed/x64-windows/bin"
           # On free-threaded builds, assert the import did not re-enable the GIL.

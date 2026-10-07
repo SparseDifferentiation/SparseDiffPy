@@ -1,0 +1,37 @@
+name: conda-forge recipe
+
+# Builds conda.recipe/ with rattler-build against conda-forge, using the subset
+# of conda-forge's pinning in conda.recipe/variants.yaml (e.g. netlib
+# libblas/libcblas on Linux), as the feedstock would.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: conda-recipe-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ ubuntu-latest, macos-14, windows-latest ]
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: recursive
+
+      - uses: prefix-dev/rattler-build-action@v0.2.39
+        with:
+          recipe-path: conda.recipe/recipe.yaml
+          rattler-build-version: v0.76.1
+          # --experimental enables load_from_file() for the version
+          build-args: --experimental --channel conda-forge
+          artifact-name: conda-package-${{ matrix.os }}

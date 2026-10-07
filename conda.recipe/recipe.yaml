@@ -1,0 +1,83 @@
+# Mirror of the conda-forge recipe (conda-forge/staged-recipes#34978), built
+# from this checkout instead of the PyPI sdist and without the BLAS patch, so
+# CI catches changes that would break the conda-forge feedstock.
+context:
+  name: sparsediffpy
+  version: ${{ load_from_file("pyproject.toml").project.version }}
+
+package:
+  name: ${{ name }}
+  version: ${{ version }}
+
+source:
+  path: ../
+
+build:
+  number: 0
+  skip:
+    - match(python, "<3.11")
+  script:
+    - if: linux
+      then:
+        - export SKBUILD_CMAKE_ARGS="-DBLA_VENDOR=Generic"
+        # scikit-build-core otherwise falls back to "Unix Makefiles", and make
+        # isn't in the build env
+        - export CMAKE_GENERATOR=Ninja
+    - ${{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
+
+requirements:
+  build:
+    - if: build_platform != target_platform
+      then:
+        - python
+        - cross-python_${{ target_platform }}
+        - numpy
+    - ${{ compiler("c") }}
+    - ${{ stdlib("c") }}
+    - cmake
+    - ninja
+  host:
+    - python
+    - pip
+    - scikit-build-core >=0.10
+    - numpy
+    # macOS links the Accelerate framework
+    - if: linux
+      then:
+        - libblas
+        - libcblas
+        - blas-devel
+    - if: win
+      then:
+        - openblas
+        # openblas has no run_exports; libopenblas (which ships openblas.dll)
+        # does, so listing it here adds the runtime dependency
+        - libopenblas
+  run:
+    - python
+    - numpy >=2
+
+tests:
+  - python:
+      imports:
+        - sparsediffpy
+        - sparsediffpy._sparsediffengine
+      pip_check: true
+  - files:
+      recipe:
+        - test_sparsediffpy.py
+    requirements:
+      run:
+        - python
+        - numpy
+    script:
+      - python test_sparsediffpy.py
+
+about:
+  homepage: https://github.com/SparseDifferentiation/SparseDiffPy
+  repository: https://github.com/SparseDifferentiation/SparseDiffPy
+  summary: Python bindings for SparseDiffEngine algorithmic differentiation
+  license: Apache-2.0
+  license_file:
+    - LICENSE
+    - SparseDiffEngine/LICENSE
