@@ -39,7 +39,6 @@ endif()
 target_include_directories(_sparsediffengine PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/SparseDiffEngine/include
     ${CMAKE_CURRENT_SOURCE_DIR}/SparseDiffEngine/include/atoms
-    ${CMAKE_CURRENT_SOURCE_DIR}/SparseDiffEngine/include/utils
     ${CMAKE_CURRENT_SOURCE_DIR}/SparseDiffEngine/include/old-code
     ${CMAKE_CURRENT_SOURCE_DIR}/SparseDiffEngine/src
     ${CMAKE_CURRENT_SOURCE_DIR}/sparsediffpy/_bindings
