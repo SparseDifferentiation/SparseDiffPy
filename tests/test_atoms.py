@@ -154,6 +154,15 @@ def quad_forms(s):
         lambda: np.c_[[xv() @ Q @ xv(), xv() @ Q @ xv(), 2 * xv() @ Q @ xv()]]
 
 
+@case()
+def quad_form_nonsymmetric(s):
+    x = s.Variable(3, 1)
+    N = Q + np.triu(np.ones((3, 3)), 1)  # not symmetric
+    xv = lambda: x.value.ravel()  # noqa: E731
+    return sp.quad_form(x, N) + sp.quad_form(x, sps.csr_matrix(N)), \
+        lambda: 2 * xv() @ N @ xv()
+
+
 @case(positive=True)
 def quad_over_lin(s):
     x, z = s.Variable(3, 1), s.Variable(1, 1)

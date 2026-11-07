@@ -130,7 +130,11 @@ def vstack(exprs):
 
 
 def quad_form(x, Q):
-    """x' Q x for a column vector x (n, 1) and a constant or Parameter Q (n, n)."""
+    """x' Q x for a column vector x (n, 1) and a constant or Parameter Q (n, n).
+
+    A NumPy Q uses the engine's dense (BLAS) path, a scipy.sparse Q the sparse
+    path. Constant Q is symmetrized; a Parameter Q must be symmetric.
+    """
     x, Q = _wrap(x), _wrap(Q)
     n = x.shape[0]
     if x.shape[1] != 1 or Q.shape != (n, n):
@@ -141,7 +145,12 @@ def quad_form(x, Q):
                     [Q, x], (1, 1))
     if not isinstance(Q, Constant):
         raise TypeError("quad_form: Q must be a constant or a Parameter")
-    V = sps.csr_matrix(Q.value)
+    V = (Q.value + Q.value.T) / 2  # the engine assumes symmetric Q
+    if not sps.issparse(V):
+        data = np.ascontiguousarray(V).ravel()
+        return Node(lambda c: _C.make_quad_form(None, c, "dense", data, n),
+                    [x], (1, 1))
+    V = sps.csr_matrix(V)
     return Node(lambda c: _C.make_quad_form(
         None, c, "sparse", V.data, V.indices.astype(np.int32),
         V.indptr.astype(np.int32), n, n), [x], (1, 1))
