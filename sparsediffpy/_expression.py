@@ -152,7 +152,6 @@ class Scope:
 
     def __init__(self):
         self._values = np.zeros(0)
-        self._parameters = []
         self._n_params = 0
         self._param_version = 0
 
@@ -168,7 +167,6 @@ class Scope:
         shape = _check_shape(d1, d2)
         param = Parameter(self, self._n_params, shape, value)
         self._n_params += param.size
-        self._parameters.append(param)
         return param
 
     @property
@@ -223,12 +221,8 @@ def _add(a, b):
 
 def _mul(a, b):
     if _is_data(b) and not _is_data(a):
-        a, b = b, a
-    if not _is_data(a):  # both variable-dependent
-        shape = _broadcast_shape(a.shape, b.shape)
-        return Node(_C.make_multiply,
-                    [broadcast(a, shape), broadcast(b, shape)], shape)
-    if a.shape == (1, 1):
+        a, b = b, a  # put the constant/parameter operand (if any) first
+    if _is_data(a) and a.shape == (1, 1):
         return Node(_C.make_param_scalar_mult, [a, b], b.shape)
     shape = _broadcast_shape(a.shape, b.shape)
     a, b = broadcast(a, shape), broadcast(b, shape)
@@ -300,8 +294,5 @@ def _index(x, key):
         rows, cols = _axis_indices(key[0], d1), _axis_indices(key[1], d2)
         flat = (rows[:, None] + cols[None, :] * d1).ravel(order="F")
         return index_flat(x, flat, (rows.size, cols.size))
-    if d1 == 1 and d2 > 1:  # row vector: index along its columns
-        flat = _axis_indices(key, d2)
-        return index_flat(x, flat, (1, flat.size))
-    flat = _axis_indices(key, x.size)  # column vector / column-major flat
-    return index_flat(x, flat, (flat.size, 1))
+    flat = _axis_indices(key, x.size)  # column-major flat index
+    return index_flat(x, flat, (1, flat.size) if d1 == 1 else (flat.size, 1))

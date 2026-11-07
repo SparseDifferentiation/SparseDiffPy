@@ -137,6 +137,10 @@ class Problem:
         if lagrange.size != self.total_constraint_size:
             raise ValueError(f"lagrange has {lagrange.size} entries, expected "
                              f"{self.total_constraint_size}")
+        # The engine's Hessian reuses Jacobian values cached by eval_jacobian,
+        # so those must be current at this point.
+        _C.problem_gradient(self._capsule)
+        _C.problem_jacobian(self._capsule)
         return _csr(_C.problem_hessian(self._capsule, float(obj_factor), lagrange))
 
 
@@ -159,7 +163,6 @@ class CompiledExpression:
     def hessian(self, weights):
         """Sparse Hessian of w' f(x), shape (n_vars, n_vars)."""
         self.forward()
-        self._problem.jacobian()
         return self._problem.hessian(0.0, weights)
 
 

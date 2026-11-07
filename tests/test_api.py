@@ -180,3 +180,25 @@ def test_problem_parameters(scope):
     a.value = 0.5
     assert prob.objective_forward(u) == pytest.approx(5.0)
     np.testing.assert_allclose(prob.gradient(), u)
+
+
+def test_hessian_without_prior_jacobian(scope):
+    """The engine's Hessian reuses cached Jacobian values; hessian() must refresh them."""
+    x, y = scope.Variable(2, 1), scope.Variable(2, 1)
+    fn = sp.compile(x * y + sp.sin(x * y))
+    prob = sp.Problem(sp.sum(x * y), [x * y])
+    for u in ([0.1, 0.2, 0.3, 0.4], [1.0, -2.0, 0.5, 3.0]):
+        scope.set_values(u)
+        xy, xv, yv = np.multiply(u[:2], u[2:]), np.array(u[:2]), np.array(u[2:])
+        w = np.array([1.0, 2.0])
+        # d2/dx_i dy_i of w_i * (x_i y_i + sin(x_i y_i))
+        d2 = lambda a, b: w * (-np.sin(xy) * a * b)  # noqa: E731
+        H = np.block([[np.diag(d2(yv, yv)), np.diag(w * (1 + np.cos(xy)) + d2(xv, yv))],
+                      [np.diag(w * (1 + np.cos(xy)) + d2(xv, yv)), np.diag(d2(xv, xv))]])
+        np.testing.assert_allclose(fn.hessian(w).toarray(), H, atol=1e-12)
+
+        prob.objective_forward(u)
+        prob.constraint_forward(u)
+        H_prob = np.block([[np.zeros((2, 2)), np.diag(2.0 + w)],
+                           [np.diag(2.0 + w), np.zeros((2, 2))]])
+        np.testing.assert_allclose(prob.hessian(2.0, w).toarray(), H_prob, atol=1e-12)
