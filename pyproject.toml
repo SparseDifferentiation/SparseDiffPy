@@ -7,7 +7,7 @@ name = "sparsediffpy"
 version = "0.9.0"
 description = "Python bindings for SparseDiffEngine algorithmic differentiation"
 requires-python = ">=3.11"
-dependencies = ["numpy >= 2.0.0"]
+dependencies = ["numpy >= 2.0.0", "scipy"]
 license = "Apache-2.0"
 
 [project.readme]
@@ -22,3 +22,7 @@ wheel.packages = ["sparsediffpy"]
 # Persistent build dir: avoids scikit-build-core's TemporaryDirectory, whose cleanup
 # intermittently fails on Windows CI with WinError 32 (lingering mspdbsrv/AV handle).
 build-dir = "build/{wheel_tag}"
+
+[tool.cibuildwheel]
+test-requires = ["pytest"]
+test-command = "pytest {project}/tests -q"
