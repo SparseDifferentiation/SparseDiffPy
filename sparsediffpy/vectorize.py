@@ -15,6 +15,12 @@ short list of instructions, in the style of LLVM IR::
 Terms whose instructions are identical differ only in their args, so each such
 group is rebuilt once as a vector expression: a ``load`` becomes a gather of
 ``x`` at the args, a ``const`` becomes a constant vector.
+
+A term that merges with no other term may itself be a long sum, such as
+``t = t + x[k]`` accumulated in a loop. Like LLVM's horizontal reduction, its
+chain of adds is flattened into operands, which are compacted and summed:
+``sum(compact(operands))``. This is kept only if the graph gets smaller, and
+it reassociates the sum (results can differ in the last bits).
 """
 
 import numpy as np
@@ -38,7 +44,8 @@ def compact(terms):
 
     Returns ``(expr, perm)``: ``expr`` has shape ``(len(terms), 1)`` and its
     row ``j`` is ``terms[perm[j]]``, or ``perm`` is ``None`` if no row moved.
-    Terms using other operations (matmul, sum, ...) are kept as they are.
+    Terms using other operations (matmul, sum, ...) are kept as they are,
+    unless they are a sum of mergeable operands.
     """
     if not terms:
         raise ValueError("compact: need at least one term")
@@ -49,18 +56,43 @@ def compact(terms):
             raise ValueError(f"compact: term {i} has shape {t.shape}, not (1, 1)")
         try:
             insts, args = _lower(t, values)
-        except (_Unsupported, RecursionError):  # deep terms are kept as is
+        except (_Unsupported, RecursionError):
             insts, args = ("single", i), None
         groups.setdefault(insts, []).append((i, t, args))
 
     parts, perm = [], []
     for insts, members in groups.items():
         perm += [i for i, _, _ in members]
-        parts.append(members[0][1] if len(members) == 1 else
+        parts.append(_reduce(members[0][1]) if len(members) == 1 else
                      _vectorize(insts, [args for _, _, args in members], values))
     expr = parts[0] if len(parts) == 1 else atoms.vstack(parts)
     perm = None if perm == list(range(len(perm))) else np.array(perm)
     return expr, perm
+
+
+def _reduce(term):
+    """``sum(compact(operands))`` for a chain of adds, if that is smaller."""
+    operands, stack = [], [term]
+    while stack:
+        e = stack.pop()
+        if isinstance(e, Node) and e.opcode == "add":
+            stack.extend(reversed(e.args))
+        else:
+            operands.append(e)
+    if len(operands) < 2:
+        return term
+    reduced = atoms.sum(compact(operands)[0])
+    return reduced if _count_nodes(reduced) < _count_nodes(term) else term
+
+
+def _count_nodes(e):
+    seen, stack = set(), [e]
+    while stack:
+        e = stack.pop()
+        if id(e) not in seen:
+            seen.add(id(e))
+            stack.extend(e.args)
+    return len(seen)
 
 
 def _lower(term, values):
