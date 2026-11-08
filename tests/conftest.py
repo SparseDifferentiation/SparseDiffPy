@@ -40,3 +40,14 @@ def check_derivatives(fn, scope, x0, w, h=1e-6, rtol=1e-5, atol=1e-6):
     scope.set_values(x0)
     np.testing.assert_allclose(J, J_fd, rtol=rtol, atol=atol, err_msg="Jacobian")
     np.testing.assert_allclose(H, H_fd, rtol=rtol, atol=atol, err_msg="Hessian")
+
+
+def count_nodes(e):
+    """Number of distinct nodes in the expression DAG rooted at e."""
+    seen, stack = set(), [e]
+    while stack:
+        e = stack.pop()
+        if id(e) not in seen:
+            seen.add(id(e))
+            stack.extend(e.args)
+    return len(seen)
