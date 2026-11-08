@@ -85,16 +85,16 @@ class Expression:
 class Node(Expression):
     """An operation: ``make(*child_capsules)`` builds its C capsule.
 
-    ``op`` names the operation and ``attrs`` holds the parameters that rewrites
-    such as :func:`compact` read (``idx`` for index, ``p`` for power).
+    ``opcode`` names the operation and ``attrs`` holds the parameters that
+    rewrites such as :func:`compact` read (``idx`` for index, ``p`` for power).
     Compilation only uses ``make``.
     """
 
-    def __init__(self, make, args, shape, op=None, attrs=None):
+    def __init__(self, make, args, shape, opcode=None, attrs=None):
         self.make = make
         self.args = tuple(args)
         self.shape = tuple(shape)
-        self.op = op
+        self.opcode = opcode
         self.attrs = attrs
 
 

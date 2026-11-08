@@ -120,11 +120,11 @@ x = scope.Variable(n, 1)
 f, _ = sp.compact([(x[k] - 1.0) ** 2 for k in range(n)])
 g, perm = sp.compact([x[k] ** 2 + x[k + 1] - 1.0 for k in range(n - 1)])
 prob = sp.Problem(sp.sum(f), [g])  # 2 vector expressions, not ~2000 scalar ones
-assert perm is None  # one template per list, so rows kept their order
+assert perm is None  # each list merged into one group, so no row moved
 ```
 
-When a list mixes templates, rows are grouped by template: row `j` of the result
-is `terms[perm[j]]`. Map row data such as bounds in with `values[perm]`, and
+When a list mixes terms with different structure, rows are grouped by
+structure: row `j` of the result is `terms[perm[j]]`. Map row data such as bounds in with `values[perm]`, and
 multipliers back out with `out[perm] = lam`.
 
 ## Supported operations
