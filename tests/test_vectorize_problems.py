@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 import sparsediffpy as sp
+from conftest import count_nodes
 from sparsediffpy.expression import Constant
 
 TOL = dict(rtol=1e-10, atol=1e-10)
@@ -121,10 +122,6 @@ def vdp(N):
     return 3 * N + 2, vec, scalar
 
 
-def _n_groups(e):
-    return len(e.args) if e.opcode == "vstack" else 1
-
-
 def _build(problem):
     n, vec, scalar = problem
     f, g = vec(sp.Scope().Variable(n, 1))
@@ -152,23 +149,29 @@ def _assert_same(n, ref, p, perm):
             np.testing.assert_allclose(a, b, **TOL)
 
 
-@pytest.mark.parametrize("make, size, f_groups, g_groups", [
-    (luksan, 3, 1, 1), (luksan, 12, 1, 1), (luksan, 50, 1, 1),
-    (brusselator, 4, None, 2),
-    (logreg, 6, 13, 1),
-    (vdp, 1, 1, 2), (vdp, 6, 1, 2), (vdp, 20, 1, 2),
+@pytest.mark.parametrize("make, size", [
+    (luksan, 3), (luksan, 12), (luksan, 50), (brusselator, 4), (logreg, 6),
+    (vdp, 1), (vdp, 6), (vdp, 20),
 ], ids=lambda v: getattr(v, "__name__", str(v)))
-def test_compact_matches_vectorized(make, size, f_groups, g_groups):
+def test_compact_matches_vectorized(make, size):
     n, ref, p, f, g, perm = _build(make(size))
     assert perm is None
-    assert _n_groups(g) == g_groups
-    assert f_groups is None or _n_groups(f) == f_groups
     _assert_same(n, ref, p, perm)
+
+
+@pytest.mark.parametrize("make, size", [
+    (luksan, 10), (brusselator, 3), (logreg, 6), (vdp, 3),
+], ids=lambda v: getattr(v, "__name__", str(v)))
+def test_graph_size_does_not_grow(make, size):
+    *_, f1, g1, _ = _build(make(size))
+    *_, f2, g2, _ = _build(make(2 * size))
+    assert count_nodes(g1) == count_nodes(g2)
+    if f1 is not None and make is not logreg:
+        assert count_nodes(f1) == count_nodes(f2)
 
 
 def test_interleaved_rows_are_grouped():
     n, ref, p, f, g, perm = _build(brusselator(3, interleaved=True))
-    assert _n_groups(g) == 2
     assert list(perm) == list(range(0, 18, 2)) + list(range(1, 18, 2))
     _assert_same(n, ref, p, None)
 
@@ -183,12 +186,6 @@ def test_varying_constant_stays_per_row():
 
 
 def test_compact_shrinks_the_graph():
-    def count(e, seen):
-        if id(e) in seen:
-            return 0
-        seen.add(id(e))
-        return 1 + sum(count(a, seen) for a in e.args)
-
     n, _, scalar = luksan(200)
     terms = scalar(sp.Scope().Variable(n, 1))[1]
-    assert 50 * count(sp.compact(terms)[0], set()) < count(sp.vstack(terms), set())
+    assert 50 * count_nodes(sp.compact(terms)[0]) < count_nodes(sp.vstack(terms))
