@@ -293,6 +293,8 @@ def index_flat(x, flat_indices, shape):
 
 
 def _axis_indices(key, n):
+    if isinstance(key, (bool, np.bool_)):  # bool subclasses int; x[True] is not x[1]
+        raise IndexError("Boolean indices are not supported; use integer indices")
     if isinstance(key, (int, np.integer)):
         if not -n <= key < n:
             raise IndexError(f"Index {key} out of range for axis of length {n}")

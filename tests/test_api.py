@@ -183,6 +183,9 @@ def test_index_must_be_explicit(scope):
     assert X[1, :].shape == (1, 3) and X[:, 1].shape == (2, 1)
     with pytest.raises(IndexError, match="integer"):
         x[[True, False, True, False]]
+    for key in (True, False, np.True_, (True, 0), (0, False)):
+        with pytest.raises(IndexError, match="Boolean"):
+            x[key]
     with pytest.raises(IndexError, match="1-D"):
         x[np.array([[0, 1]])]
     with pytest.raises(IndexError, match="2 indices"):
