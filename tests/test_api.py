@@ -203,6 +203,54 @@ def test_compile_errors(scope):
         scope.Variable(1, 1) ** scope.Variable(1, 1)
 
 
+def test_expressions_are_not_iterable(scope):
+    x, X = scope.Variable(3, 1), scope.Variable(2, 2)
+    with pytest.raises(TypeError, match="not iterable"):
+        list(x)
+    with pytest.raises(TypeError, match="not iterable"):
+        sp.Problem(sp.sum(X), X)  # constraints must be a list
+    assert sp.Problem(sp.sum(X), [X]).total_constraint_size == 4
+
+
+def test_none_is_rejected(scope):
+    x, p = scope.Variable(2, 1), scope.Parameter(2, 1)
+    with pytest.raises(TypeError, match="None"):
+        x + None
+    with pytest.raises(TypeError, match="None"):
+        x.value = None
+    with pytest.raises(TypeError, match="None"):
+        p.value = None
+
+
+def test_index_flat_wraps_constants(scope):
+    x = scope.Variable(2, 1)
+    fn = sp.compile(sp.index_flat(np.array([[5.0], [6.0]]), [1], (1, 1)) + x[0])
+    x.value = [1.0, 2.0]
+    np.testing.assert_array_equal(fn.forward(), [[7.0]])
+
+
+def test_numpy_scalar_exponent(scope):
+    x = scope.Variable(2, 1)
+    f1, f2 = sp.compile(x ** np.int64(2)), sp.compile(x ** np.float32(2))
+    x.value = [1.5, -2.0]
+    np.testing.assert_array_equal(f1.forward(), x.value ** 2)
+    np.testing.assert_array_equal(f2.forward(), x.value ** 2)
+
+
+def test_quad_form_parameter_must_be_symmetric(scope):
+    x = scope.Variable(2, 1)
+    N, S = np.array([[1.0, 5.0], [0.0, 1.0]]), np.array([[1.0, 2.0], [2.0, 3.0]])
+    with pytest.raises(ValueError, match="symmetric"):
+        sp.quad_form(x, scope.Parameter(2, 2, value=N))
+    P = scope.Parameter(2, 2, value=S)
+    fn = sp.compile(sp.quad_form(x, P))
+    with pytest.raises(ValueError, match="symmetric"):
+        P.value = N
+    x.value = [1.0, 1.0]
+    P.value = 2 * S
+    np.testing.assert_allclose(fn.jacobian().toarray(), [2 * (2 * S) @ [1.0, 1.0]])
+
+
 # --- parameters ----------------------------------------------------------------
 
 def test_parameter_update_without_recompile(scope):

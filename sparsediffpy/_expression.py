@@ -5,6 +5,8 @@ C capsules of ``args`` and returns the node's own capsule. Shapes are always
 2-D ``(d1, d2)`` and values are flattened column-major, like the C engine.
 """
 
+import numbers
+
 import numpy as np
 import scipy.sparse as sps
 
@@ -66,12 +68,17 @@ class Expression:
         return _matmul(_wrap(other), self)
 
     def __pow__(self, p):
-        if not isinstance(p, (int, float)):
+        if not isinstance(p, numbers.Real):
             raise TypeError("Exponent must be a constant number")
         return Node(lambda c: _C.make_power(c, float(p)), [self], self.shape)
 
     def __getitem__(self, key):
         return _index(self, key)
+
+    def __iter__(self):
+        # Without this, Python would iterate via __getitem__ until IndexError.
+        raise TypeError("Expressions are not iterable; index with x[i, j] or "
+                        "pass a list of expressions")
 
 
 class Node(Expression):
@@ -87,6 +94,8 @@ class Constant(Expression):
     """Fixed dense or scipy.sparse data."""
 
     def __init__(self, value):
+        if value is None:
+            raise TypeError("Constant value cannot be None")
         if sps.issparse(value):
             self.value = sps.csr_matrix(value, dtype=np.float64)
         else:
@@ -128,6 +137,7 @@ class Parameter(Expression):
     def __init__(self, scope, offset, shape, value=None):
         self._scope, self._offset, self.shape = scope, offset, shape
         self._flat = None
+        self._symmetric = False  # set by quad_form; the engine assumes Q = Q'
         if value is not None:
             self.value = value
 
@@ -139,8 +149,17 @@ class Parameter(Expression):
 
     @value.setter
     def value(self, val):
-        self._flat = _flatten_shaped(val, self.shape)
+        flat = _flatten_shaped(val, self.shape)
+        if self._symmetric:
+            _check_symmetric(flat, self.shape)
+        self._flat = flat
         self._scope._param_version += 1
+
+
+def _check_symmetric(flat, shape):
+    M = flat.reshape(shape, order="F")
+    if not np.allclose(M, M.T):
+        raise ValueError("Parameter used in quad_form must be symmetric")
 
 
 def _flatten_shaped(val, shape):
@@ -149,6 +168,8 @@ def _flatten_shaped(val, shape):
     Also accepts a 1-D array for a vector shape (n, 1) or (1, n), and a scalar
     for (1, 1). Any other shape raises, even with the right element count.
     """
+    if val is None:
+        raise TypeError("value cannot be None")
     arr = np.asarray(val, dtype=np.float64)
     if not (arr.shape == shape
             or (arr.ndim == 0 and shape == (1, 1))
@@ -283,6 +304,7 @@ def _matmul_with_data(make, A):
 
 def index_flat(x, flat_indices, shape):
     """Gather entries of ``x`` by column-major flat indices into ``shape``."""
+    x = _wrap(x)
     idx = np.asarray(flat_indices, dtype=np.int32).ravel()
     shape = _check_shape(*shape)
     if idx.size != shape[0] * shape[1]:

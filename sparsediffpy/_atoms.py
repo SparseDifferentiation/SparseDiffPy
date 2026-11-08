@@ -5,7 +5,7 @@ import scipy.sparse as sps
 
 from sparsediffpy import _sparsediffengine as _C
 from sparsediffpy._expression import (
-    Constant, Node, Parameter, Variable, _check_shape, _wrap,
+    Constant, Node, Parameter, Variable, _check_shape, _check_symmetric, _wrap,
 )
 
 
@@ -133,7 +133,8 @@ def quad_form(x, Q):
     """x' Q x for a column vector x (n, 1) and a constant or Parameter Q (n, n).
 
     A NumPy Q uses the engine's dense (BLAS) path, a scipy.sparse Q the sparse
-    path. Constant Q is symmetrized; a Parameter Q must be symmetric.
+    path. Constant Q is symmetrized; a Parameter Q must be symmetric, which is
+    checked here and on every later ``Q.value`` update.
     """
     x, Q = _wrap(x), _wrap(Q)
     n = x.shape[0]
@@ -141,6 +142,9 @@ def quad_form(x, Q):
         raise ValueError(f"quad_form: need x (n, 1) and Q (n, n), "
                          f"got {x.shape} and {Q.shape}")
     if isinstance(Q, Parameter):
+        Q._symmetric = True  # checked now and on every later Q.value update
+        if Q._flat is not None:
+            _check_symmetric(Q._flat, Q.shape)
         return Node(lambda p, c: _C.make_quad_form(p, c, "dense", None, n),
                     [Q, x], (1, 1))
     if not isinstance(Q, Constant):
