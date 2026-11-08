@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 import sparsediffpy as sp
+from sparsediffpy import _compile
 
 
 # --- scope and values ---------------------------------------------------------
@@ -169,6 +170,86 @@ def test_unset_parameter_raises(scope):
         fn.forward()
     p.value = [1.0, 2.0]
     np.testing.assert_allclose(fn.forward(), [[0], [0]])
+
+
+# --- Caching ------------------------------------------------------------------------
+
+def count_calls(monkeypatch, name):
+    """Count calls to the engine function `name` as seen from _compile."""
+    calls, real = [], getattr(_compile._C, name)
+
+    def counted(*args):
+        calls.append(1)
+        return real(*args)
+    monkeypatch.setattr(_compile._C, name, counted)
+    return calls
+
+
+def test_forward_runs_once_per_point(scope, monkeypatch):
+    n_fwd = count_calls(monkeypatch, "problem_constraint_forward")
+    x, p = scope.Variable(2, 1), scope.Parameter(1, 1, value=1.0)
+    fn = sp.compile(p * sp.exp(x))
+    x.value = [0.0, 1.0]
+    for _ in range(3):
+        np.testing.assert_allclose(fn.forward(), np.exp([[0.0], [1.0]]))
+    assert len(n_fwd) == 1
+    x.value = [1.0, 1.0]
+    fn.forward()
+    scope.set_values([2.0, 2.0])
+    fn.forward()
+    assert len(n_fwd) == 3
+    p.value = 3.0
+    np.testing.assert_allclose(fn.forward(), 3.0 * np.exp([[2.0], [2.0]]))
+    assert len(n_fwd) == 4
+
+
+def test_derivatives_reuse_forward_and_jacobian(scope, monkeypatch):
+    n_fwd = count_calls(monkeypatch, "problem_constraint_forward")
+    n_jac = count_calls(monkeypatch, "problem_jacobian")
+    n_hess = count_calls(monkeypatch, "problem_hessian")
+    x = scope.Variable(2, 1)
+    fn = sp.compile(sp.exp(x))
+    x.value = [0.5, -0.5]
+    fn.forward()
+    J = fn.jacobian()
+    assert fn.jacobian() is J
+    fn.hessian([1.0, 1.0])
+    fn.hessian([2.0, 0.0])
+    assert (len(n_fwd), len(n_jac), len(n_hess)) == (1, 1, 2)
+    x.value = [0.0, 0.0]
+    fn.hessian([1.0, 1.0])
+    assert (len(n_fwd), len(n_jac), len(n_hess)) == (2, 2, 3)
+
+
+def test_problem_skips_repeated_u(scope, monkeypatch):
+    n_fwd = count_calls(monkeypatch, "problem_constraint_forward")
+    x = scope.Variable(2, 1)
+    prob = sp.Problem(sp.sum(x), [sp.exp(x)])
+    prob.constraint_forward(np.array([1.0, 2.0]))
+    prob.constraint_forward(np.array([1.0, 2.0]))  # equal, distinct array
+    assert len(n_fwd) == 1
+    prob.constraint_forward(np.array([1.0, 3.0]))
+    assert len(n_fwd) == 2
+    prob.constraint_forward()  # scope values are a different point
+    assert len(n_fwd) == 3
+    np.testing.assert_allclose(prob.constraint_forward(), [1.0, 1.0])
+    assert len(n_fwd) == 3
+
+
+def test_derivatives_require_forward(scope):
+    x = scope.Variable(2, 1)
+    prob = sp.Problem(sp.sum(x), [sp.exp(x)])
+    with pytest.raises(RuntimeError, match="objective_forward"):
+        prob.gradient()
+    with pytest.raises(RuntimeError, match="constraint_forward"):
+        prob.jacobian()
+    prob.objective_forward([1.0, 2.0])
+    prob.constraint_forward([1.0, 3.0])
+    with pytest.raises(RuntimeError, match="same point"):
+        prob.hessian(1.0, [1.0, 1.0])
+    prob.objective_forward([1.0, 2.0])  # a point is "the last u": redo both forwards
+    prob.constraint_forward([1.0, 2.0])
+    assert prob.hessian(1.0, [1.0, 1.0]).shape == (2, 2)
 
 
 # --- Problem ----------------------------------------------------------------------

@@ -74,6 +74,12 @@ class Problem:
 
         prob.objective_forward(u); prob.constraint_forward(u)
         prob.gradient(); prob.jacobian(); prob.hessian(obj_factor, lagrange)
+
+    Each stage runs in the engine only when its point changed: a forward is
+    skipped when u (or the scope's values and parameters) is unchanged, and
+    gradient/jacobian are skipped when the matching forward has not moved.
+    Skipped calls return the cached object, which the problem owns: do not
+    modify it in place.
     """
 
     def __init__(self, objective, constraints=(), verbose=False):
@@ -92,7 +98,11 @@ class Problem:
         _C.problem_init_derivatives(self._capsule)
         self._param_version = None
         self.n_vars = self._scope.total_var_size
-        self.total_constraint_size = np.sum([c.size for c in constraints]).item()
+        self.total_constraint_size = sum(c.size for c in constraints)
+        # Point keys: ("scope", values_version, param_version) or ("u", u_version,
+        # param_version). Each stage remembers the key it was last computed at.
+        self._last_u, self._u_version = None, 0
+        self._obj_at = self._con_at = self._grad_at = self._jac_at = None
 
     def _sync_params(self):
         """Push Parameter values to the engine if any changed since last time."""
@@ -107,43 +117,74 @@ class Problem:
         _C.problem_update_params(self._capsule, theta)
         self._param_version = self._scope._param_version
 
-    def _u(self, u):
-        """Flat variable vector of length n_vars (the C side does not check it)."""
+    def _point(self, u):
+        """Return (key, flat u) for the evaluation point u (None: scope values).
+
+        The C side does not check the length of u, so it is checked here.
+        """
         if u is None:
-            return self._scope._values[:self.n_vars]
-        return _flatten(u, self.n_vars)
+            key = ("scope", self._scope._values_version)
+            u = self._scope._values[:self.n_vars]
+        else:
+            u = _flatten(u, self.n_vars)
+            if self._last_u is None or not np.array_equal(u, self._last_u):
+                self._last_u, self._u_version = u.copy(), self._u_version + 1
+            key = ("u", self._u_version)
+        return key + (self._scope._param_version,), u
 
     def objective_forward(self, u=None):
         """Objective value at u (default: the scope's current values)."""
-        self._sync_params()
-        return _C.problem_objective_forward(self._capsule, self._u(u))
+        key, u = self._point(u)
+        if self._obj_at != key:
+            self._sync_params()
+            self._obj_value = _C.problem_objective_forward(self._capsule, u)
+            self._obj_at = key
+        return self._obj_value
 
     def constraint_forward(self, u=None):
         """Stacked constraint values at u (default: the scope's current values)."""
-        self._sync_params()
-        return _C.problem_constraint_forward(self._capsule, self._u(u))
+        key, u = self._point(u)
+        if self._con_at != key:
+            self._sync_params()
+            self._con_value = _C.problem_constraint_forward(self._capsule, u)
+            self._con_at = key
+        return self._con_value
 
     def gradient(self):
         """Objective gradient at the point of the last objective_forward."""
-        return _C.problem_gradient(self._capsule)
+        if self._obj_at is None:
+            raise RuntimeError("call objective_forward before gradient")
+        if self._grad_at != self._obj_at:
+            self._grad_value = _C.problem_gradient(self._capsule)
+            self._grad_at = self._obj_at
+        return self._grad_value
 
     def jacobian(self):
         """Constraint Jacobian (csr_matrix) at the last constraint_forward point."""
-        return _csr(_C.problem_jacobian(self._capsule))
+        if self._con_at is None:
+            raise RuntimeError("call constraint_forward before jacobian")
+        if self._jac_at != self._con_at:
+            self._jac_value = _csr(_C.problem_jacobian(self._capsule))
+            self._jac_at = self._con_at
+        return self._jac_value
 
     def hessian(self, obj_factor, lagrange):
         """Lagrangian Hessian obj_factor * H_f + sum_i lagrange_i * H_gi (csr_matrix).
 
-        Call objective_forward and constraint_forward at the point first.
+        Call objective_forward and constraint_forward at the same point first.
         """
         lagrange = np.asarray(lagrange, dtype=np.float64).ravel(order="F")
         if lagrange.size != self.total_constraint_size:
             raise ValueError(f"lagrange has {lagrange.size} entries, expected "
                              f"{self.total_constraint_size}")
-        # The engine's Hessian reuses Jacobian values cached by eval_jacobian,
-        # so those must be current at this point.
-        _C.problem_gradient(self._capsule)
-        _C.problem_jacobian(self._capsule)
+        # The engine's Hessian reads Jacobian values cached by eval_jacobian, so
+        # the gradient and Jacobian must be current (no-ops if they already are).
+        self.gradient()
+        if self.total_constraint_size:
+            self.jacobian()
+            if self._con_at != self._obj_at:
+                raise RuntimeError("objective_forward and constraint_forward must "
+                                   "be evaluated at the same point before hessian")
         return _csr(_C.problem_hessian(self._capsule, float(obj_factor), lagrange))
 
 
@@ -165,6 +206,7 @@ class CompiledExpression:
 
     def hessian(self, weights):
         """Sparse Hessian of w' f(x), shape (n_vars, n_vars)."""
+        self._problem.objective_forward()  # the zero objective; needed by gradient()
         self.forward()
         return self._problem.hessian(0.0, weights)
 

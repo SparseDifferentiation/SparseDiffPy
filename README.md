@@ -57,7 +57,11 @@ J2 = fn.jacobian()
 
 `sp.Problem(objective, constraints)` exposes the callbacks NLP solvers ask for:
 objective value and gradient, constraint values and Jacobian, and the Lagrangian
-Hessian `obj_factor * H_f + sum_i lagrange_i * H_gi`. Here it drives SciPy:
+Hessian `obj_factor * H_f + sum_i lagrange_i * H_gi`. A stage runs in the engine
+only when its point changed: a forward called again with the same `u` (or with
+unchanged scope values and parameters) returns the cached result, and
+`gradient()`/`jacobian()` are reused until the matching forward moves. Returned
+arrays are owned by the problem, so do not modify them in place. Here it drives SciPy:
 
 ```python
 import numpy as np
@@ -75,8 +79,8 @@ def grad(u):
     prob.objective_forward(u)
     return prob.gradient()
 
-def obj_hess(u):
-    prob.objective_forward(u)
+def obj_hess(u):  # the Lagrangian Hessian needs both forwards at u (cached if done)
+    prob.objective_forward(u); prob.constraint_forward(u)
     return prob.hessian(1.0, [0.0])
 
 def con_jac(u):
@@ -84,7 +88,7 @@ def con_jac(u):
     return prob.jacobian()
 
 def con_hess(u, v):
-    prob.constraint_forward(u)
+    prob.objective_forward(u); prob.constraint_forward(u)
     return prob.hessian(0.0, v)
 
 con = NonlinearConstraint(prob.constraint_forward, -np.inf, 1.0,

@@ -119,6 +119,7 @@ class Variable(Expression):
     def value(self, val):
         self._scope._values[self._offset:self._offset + self.size] = \
             _flatten(val, self.size)
+        self._scope._values_version += 1
 
 
 class Parameter(Expression):
@@ -154,6 +155,7 @@ class Scope:
 
     def __init__(self):
         self._values = np.zeros(0)
+        self._values_version = 0  # bumped on every write, so problems can skip stale work
         self._n_params = 0
         self._param_version = 0
 
@@ -178,6 +180,7 @@ class Scope:
     def set_values(self, array):
         """Set all variables at once from a flat array (declaration order)."""
         self._values[:] = _flatten(array, self._values.size)
+        self._values_version += 1
 
     def get_values(self):
         return self._values.copy()
