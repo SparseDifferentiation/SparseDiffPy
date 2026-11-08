@@ -1,7 +1,8 @@
 """Expression graph: Scope, leaves (Variable/Parameter/Constant), and operators.
 
-Every non-leaf is a generic ``Node(make, args, shape)``: ``make`` receives the
-C capsules of ``args`` and returns the node's own capsule. Shapes are always
+Every non-leaf is a generic ``Node(make, args, shape, opcode)``: ``make``
+receives the C capsules of ``args`` and returns the node's own capsule, and
+``opcode`` names the operation. Shapes are always
 2-D ``(d1, d2)`` and values are flattened column-major, like the C engine.
 """
 
@@ -90,7 +91,7 @@ class Node(Expression):
     Compilation only uses ``make``.
     """
 
-    def __init__(self, make, args, shape, opcode=None, attrs=None):
+    def __init__(self, make, args, shape, opcode, attrs=None):
         self.make = make
         self.args = tuple(args)
         self.shape = tuple(shape)
