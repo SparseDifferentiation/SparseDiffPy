@@ -115,6 +115,18 @@ def test_parameter_update_after_compact():
     np.testing.assert_allclose(prob.constraint_forward(u), 5.0 * u)
 
 
+def test_deep_term_is_kept_as_is():
+    x = sp.Scope().Variable(3000, 1)
+    deep = x[0]
+    for k in range(1, 3000):
+        deep = deep + x[k]
+    g, perm = sp.compact([deep, x[0] ** 2, x[1] ** 2])
+    assert perm is None and g.args[0] is deep
+    u = np.ones(3000)
+    np.testing.assert_allclose(sp.Problem(sp.sum(g), [g]).constraint_forward(u),
+                               [3000.0, 1.0, 1.0])
+
+
 def test_rejects_non_scalar_and_empty():
     x = sp.Scope().Variable(3, 1)
     with pytest.raises(ValueError):
