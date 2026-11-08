@@ -76,7 +76,7 @@ def test_shared_subexpression_and_parameter(rng):
     assert_matches_vstack(build, 5, rng)
 
 
-def test_templates_without_holes(rng):
+def test_templates_without_params(rng):
     def build(scope):
         y = scope.Variable(1, 1)
         return [y, y, sp.exp(y), sp.exp(y)]
