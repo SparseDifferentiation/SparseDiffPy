@@ -1,10 +1,13 @@
 """Merge scalar terms written in a Python loop into vector expressions.
 
 A loop such as ``[x[k] ** 2 + x[k + 1] - 1 for k in range(n - 1)]`` gives the
-engine one small expression per term. The terms share a *template*: the same
-operations, differing only in which entries of a variable and which scalar
-constants they use. :func:`compact` rebuilds each template once as a vector
-expression, with the varying parts gathered into index arrays and constants.
+engine one small expression per term. :func:`compact` vectorizes them in the
+spirit of LLVM's SLP vectorizer: terms with the same *template* (isomorphic
+trees) are bundled, each term is one *lane*, and the bundle is rebuilt once as
+a vector expression. As in LLVM's MergeFunctions, the operands that differ
+between terms -- the index of ``x[i]`` and scalar constants -- become the
+template's *params*; each term supplies its own *args*, which are gathered into
+an index array or a constant vector.
 """
 
 import numpy as np
@@ -38,31 +41,32 @@ def compact(terms):
         if t.shape != (1, 1):
             raise ValueError(f"compact: term {i} has shape {t.shape}, not (1, 1)")
         try:
-            key, holes = _template(t, leaves)
+            key, args = _template(t, leaves)
         except _Unsupported:
-            key, holes = ("single", i), None
-        groups.setdefault(key, []).append((i, t, holes))
+            key, args = ("single", i), None
+        groups.setdefault(key, []).append((i, t, args))
 
     parts, perm = [], []
     for key, members in groups.items():
         perm += [i for i, _, _ in members]
         parts.append(members[0][1] if len(members) == 1 else
-                     _rebuild(key, [holes for _, _, holes in members], leaves))
+                     _vectorize(key, [args for _, _, args in members], leaves))
     expr = parts[0] if len(parts) == 1 else _atoms.vstack(parts)
     perm = None if perm == list(range(len(perm))) else np.array(perm)
     return expr, perm
 
 
 def _template(term, leaves):
-    """Describe a scalar term as ``(template, holes)``.
+    """Describe a scalar term as ``(template, args)``.
 
-    The template lists the term's nodes in post-order. Each entry names the
-    operation and refers to its children by their position in the list, so a
-    subexpression shared inside the term is part of the template. Holes are
-    what varies between terms -- the entry index of ``x[i]`` and the value of a
-    scalar constant -- in the order they are met.
+    The template lists the term's nodes in post-order, like instructions in
+    SSA form: each entry names the operation and refers to its operands by
+    their position in the list, so a subexpression shared inside the term is
+    part of the template. ``("gather", id(x))`` and ``("const",)`` entries are
+    params; ``args`` holds this term's value for each (the index ``i`` of
+    ``x[i]``, the constant's value), in template order.
     """
-    entries, holes, seen = [], [], {}
+    entries, args, seen = [], [], {}
 
     def visit(e):
         if id(e) in seen:
@@ -71,7 +75,7 @@ def _template(term, leaves):
             raise _Unsupported
         if isinstance(e, Constant):
             ent = ("const",)
-            holes.append(float(e.value[0, 0]))
+            args.append(float(e.value[0, 0]))
         elif isinstance(e, (Variable, Parameter)):
             leaves[id(e)] = e
             ent = ("leaf", id(e))
@@ -79,8 +83,8 @@ def _template(term, leaves):
             raise _Unsupported
         elif e.op == "index" and isinstance(e.args[0], Variable):
             leaves[id(e.args[0])] = e.args[0]
-            ent = ("var", id(e.args[0]))
-            holes.append(int(e.attrs["idx"][0]))
+            ent = ("gather", id(e.args[0]))
+            args.append(int(e.attrs["idx"][0]))
         elif e.op in ("add", "multiply", "scalar_mult"):
             ent = (e.op, visit(e.args[0]), visit(e.args[1]))
         elif e.op == "neg" or e.op in _UNARY:
@@ -94,21 +98,26 @@ def _template(term, leaves):
         return seen[id(e)]
 
     visit(term)
-    return tuple(entries), holes
+    return tuple(entries), args
 
 
-def _rebuild(template, holes, leaves):
-    """Evaluate the template once on (K, 1) vectors, one row per term."""
-    K = len(holes)
-    columns = iter(zip(*holes))  # the K values of each hole, in template order
+def _vectorize(template, args, leaves):
+    """Evaluate the template once on (lanes, 1) vectors, one lane per term.
+
+    ``args[lane]`` is that term's args; transposed, each param gets one value
+    per lane.
+    """
+    lanes = len(args)
+    params = iter(zip(*args))
     vals = []
     for ent in template:
         op = ent[0]
-        if op == "var":
-            vals.append(index_flat(leaves[ent[1]], next(columns), (K, 1)))
+        if op == "gather":
+            vals.append(index_flat(leaves[ent[1]], next(params), (lanes, 1)))
         elif op == "const":
-            c = np.array(next(columns))
-            vals.append(Constant(c[0] if np.all(c == c[0]) else c.reshape(K, 1)))
+            c = np.array(next(params))
+            vals.append(Constant(c[0] if np.all(c == c[0])
+                                 else c.reshape(lanes, 1)))
         elif op == "leaf":
             vals.append(leaves[ent[1]])
         elif op == "add":
@@ -121,5 +130,5 @@ def _rebuild(template, holes, leaves):
             vals.append(vals[ent[2]] ** ent[1])
         else:
             vals.append(getattr(_atoms, op)(vals[ent[1]]))
-    # a template without holes (every term is e.g. the scalar y) builds a scalar
-    return broadcast(vals[-1], (K, 1))
+    # a template without params (every term is e.g. the scalar y) is a scalar
+    return broadcast(vals[-1], (lanes, 1))
