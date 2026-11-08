@@ -49,7 +49,7 @@ def compact(terms):
             raise ValueError(f"compact: term {i} has shape {t.shape}, not (1, 1)")
         try:
             insts, args = _lower(t, values)
-        except _Unsupported:
+        except (_Unsupported, RecursionError):  # deep terms are kept as is
             insts, args = ("single", i), None
         groups.setdefault(insts, []).append((i, t, args))
 

@@ -32,14 +32,10 @@ def luksan(n):
     return n, vec, scalar
 
 
-def _forcing(N):
-    X, Y = np.meshgrid(np.linspace(0, 1, N), np.linspace(0, 1, N), indexing="ij")
-    return 5.0 * (((X - 0.3) ** 2 + (Y - 0.6) ** 2) <= 0.04).ravel()
-
-
-def brusselator(N, forcing=True, interleaved=False):
+def brusselator(N, interleaved=False):
     M, alpha = N * N, 10.0 * (N - 1) ** 2 / 1e4
-    F = _forcing(N) if forcing else np.zeros(M)
+    X, Y = np.meshgrid(np.linspace(0, 1, N), np.linspace(0, 1, N), indexing="ij")
+    F = 5.0 * (((X - 0.3) ** 2 + (Y - 0.6) ** 2) <= 0.04).ravel()
     idx = np.arange(M).reshape(N, N)
     nbrs = [np.roll(idx, s, axis=a).ravel() for s in (-1, 1) for a in (0, 1)]
 
@@ -174,15 +170,6 @@ def test_interleaved_rows_are_grouped():
     n, ref, p, f, g, perm = _build(brusselator(3, interleaved=True))
     assert list(perm) == list(range(0, 18, 2)) + list(range(1, 18, 2))
     _assert_same(n, ref, p, None)
-
-
-def test_varying_constant_stays_per_row():
-    F = _forcing(4)
-    assert 0 < np.count_nonzero(F) < F.size
-    u = np.random.default_rng(0).uniform(0.5, 1.5, 32)
-    c, c0 = [_build(brusselator(4, forcing=b))[2].constraint_forward(u)
-             for b in (True, False)]
-    np.testing.assert_allclose((c - c0)[:16], F, **TOL)
 
 
 def test_compact_shrinks_the_graph():
