@@ -10,7 +10,7 @@ import numpy as np
 import scipy.sparse as sps
 
 from sparsediffpy import _sparsediffengine as _C
-from sparsediffpy._expression import Constant, Parameter, Variable, _flatten, _wrap
+from sparsediffpy._expression import Constant, Parameter, Variable, _flatten_shaped, _flatten_vector, _wrap
 
 
 def _find_scope(exprs):
@@ -126,7 +126,7 @@ class Problem:
             key = ("scope", self._scope._values_version)
             u = self._scope._values[:self.n_vars]
         else:
-            u = _flatten(u, self.n_vars)
+            u = _flatten_vector(u, self.n_vars, "u")
             if self._last_u is None or not np.array_equal(u, self._last_u):
                 self._last_u, self._u_version = u.copy(), self._u_version + 1
             key = ("u", self._u_version)
@@ -173,10 +173,7 @@ class Problem:
 
         Call objective_forward and constraint_forward at the same point first.
         """
-        lagrange = np.asarray(lagrange, dtype=np.float64).ravel(order="F")
-        if lagrange.size != self.total_constraint_size:
-            raise ValueError(f"lagrange has {lagrange.size} entries, expected "
-                             f"{self.total_constraint_size}")
+        lagrange = _flatten_vector(lagrange, self.total_constraint_size, "lagrange")
         # The engine's Hessian reads Jacobian values cached by eval_jacobian, so
         # the gradient and Jacobian must be current (no-ops if they already are).
         self.gradient()
@@ -205,7 +202,11 @@ class CompiledExpression:
         return self._problem.jacobian()
 
     def hessian(self, weights):
-        """Sparse Hessian of w' f(x), shape (n_vars, n_vars)."""
+        """Sparse Hessian of sum(weights * f(x)), shape (n_vars, n_vars).
+
+        weights has f's shape (a 1-D array is also accepted when f is a vector).
+        """
+        weights = _flatten_shaped(weights, self.shape)
         self._problem.objective_forward()  # the zero objective; needed by gradient()
         self.forward()
         return self._problem.hessian(0.0, weights)

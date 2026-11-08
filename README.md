@@ -33,8 +33,11 @@ print(fn.hessian(np.ones(3)))  # Hessian of w' f(x) for weights w
 
 `forward()` has the shape of `f`, `jacobian()` has shape `(f.size, n_vars)`
 and `hessian(w)` has shape `(n_vars, n_vars)`, where `n_vars` is the total
-size of all variables in the scope, in declaration order. Flat vectors (the
-rows of the Jacobian, `x.value = [...]`, the weights `w`) are column-major.
+size of all variables in the scope, in declaration order. Values must have
+the exact shape of what they set: `x.value` takes an array shaped like `x`,
+`hessian(w)` takes `w` shaped like `f` (for vectors a 1-D array also works),
+and flat vectors such as `scope.set_values(u)` must be 1-D. Flat vectors (the
+rows of the Jacobian, the scope values) are column-major.
 
 **Parameters** are data you can change without recompiling:
 

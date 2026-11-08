@@ -26,7 +26,9 @@ def check_derivatives(fn, scope, x0, w, h=1e-6, rtol=1e-5, atol=1e-6):
         return at(x, fn.jacobian).toarray()
 
     J = jac(x0)
-    H = at(x0, lambda: fn.hessian(w)).toarray()
+    w = np.asarray(w, dtype=np.float64).ravel(order="F")
+    W = w.reshape(fn.shape, order="F")  # hessian() takes weights shaped like f
+    H = at(x0, lambda: fn.hessian(W)).toarray()
     J_fd = np.zeros_like(J)
     H_fd = np.zeros_like(H)
     for j in range(x0.size):

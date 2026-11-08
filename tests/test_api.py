@@ -30,6 +30,42 @@ def test_wrong_sizes(scope):
     assert p.value is None
 
 
+def test_value_shapes(scope):
+    """Values need the exact shape, not just the right number of elements."""
+    X, r, c, y = (scope.Variable(2, 3), scope.Variable(1, 3),
+                  scope.Variable(3, 1), scope.Variable(1, 1))
+    P = scope.Parameter(2, 3)
+    for leaf in (X, P):
+        for bad in (np.zeros(6), np.zeros((3, 2)), np.zeros((6, 1)), 1.0):
+            with pytest.raises(sp.DimensionError, match="expected shape"):
+                leaf.value = bad
+        leaf.value = np.arange(6.0).reshape(2, 3)
+        np.testing.assert_array_equal(leaf.value, np.arange(6.0).reshape(2, 3))
+    with pytest.raises(sp.DimensionError):
+        r.value = np.zeros((3, 1))
+    with pytest.raises(sp.DimensionError):
+        c.value = np.zeros((1, 3))
+    r.value, c.value, y.value = [1.0, 2.0, 3.0], [4.0, 5.0, 6.0], 7.0
+    np.testing.assert_array_equal(r.value, [[1, 2, 3]])
+    np.testing.assert_array_equal(c.value, [[4], [5], [6]])
+    y.value = [8.0]
+    assert y.value.shape == (1, 1)
+
+    n = scope.total_var_size
+    with pytest.raises(sp.DimensionError, match="values"):
+        scope.set_values(np.zeros((n, 1)))
+    scope.set_values(np.zeros(n))
+
+    fn = sp.compile(sp.exp(X))
+    with pytest.raises(sp.DimensionError):
+        fn.hessian(np.ones(6))
+    assert fn.hessian(np.ones((2, 3))).shape == (n, n)
+    fn = sp.compile(sp.exp(c))
+    assert fn.hessian(np.ones(3)).shape == fn.hessian(np.ones((3, 1))).shape
+    with pytest.raises(sp.DimensionError):
+        fn.hessian(np.ones((1, 3)))
+
+
 @pytest.mark.parametrize("shape", [(0, 1), (-1, 2), (2.0, 1)])
 def test_invalid_shapes(scope, shape):
     with pytest.raises((ValueError, TypeError)):
@@ -293,11 +329,14 @@ def test_problem(scope):
     with pytest.raises(ValueError, match="lagrange"):
         prob.hessian(1.0, np.ones(4))
     for bad in (np.zeros(2), np.zeros(4)):
-        with pytest.raises(ValueError, match="expected 3 elements"):
+        with pytest.raises(sp.DimensionError, match="1-D array of 3 elements"):
             prob.objective_forward(bad)
-        with pytest.raises(ValueError, match="expected 3 elements"):
+        with pytest.raises(sp.DimensionError, match="1-D array of 3 elements"):
             prob.constraint_forward(bad)
-    assert prob.objective_forward(u[:, None]) == pytest.approx(np.exp(s).sum())
+    with pytest.raises(sp.DimensionError):
+        prob.objective_forward(u[:, None])
+    with pytest.raises(sp.DimensionError, match="lagrange"):
+        prob.hessian(1.0, lam[:, None])
     with pytest.raises(ValueError, match="scalar"):
         sp.Problem(x)
 

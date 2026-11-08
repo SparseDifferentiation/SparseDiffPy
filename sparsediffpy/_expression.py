@@ -118,7 +118,7 @@ class Variable(Expression):
     @value.setter
     def value(self, val):
         self._scope._values[self._offset:self._offset + self.size] = \
-            _flatten(val, self.size)
+            _flatten_shaped(val, self.shape)
         self._scope._values_version += 1
 
 
@@ -139,15 +139,31 @@ class Parameter(Expression):
 
     @value.setter
     def value(self, val):
-        self._flat = _flatten(val, self.size)
+        self._flat = _flatten_shaped(val, self.shape)
         self._scope._param_version += 1
 
 
-def _flatten(val, size):
-    flat = np.asarray(val, dtype=np.float64).ravel(order="F")
-    if flat.size != size:
-        raise DimensionError(f"expected {size} elements, got {flat.size}")
-    return flat
+def _flatten_shaped(val, shape):
+    """Flatten a value of shape ``shape`` column-major.
+
+    Also accepts a 1-D array for a vector shape (n, 1) or (1, n), and a scalar
+    for (1, 1). Any other shape raises, even with the right element count.
+    """
+    arr = np.asarray(val, dtype=np.float64)
+    if not (arr.shape == shape
+            or (arr.ndim == 0 and shape == (1, 1))
+            or (arr.ndim == 1 and min(shape) == 1 and arr.size == shape[0] * shape[1])):
+        raise DimensionError(f"expected shape {shape}, got {arr.shape}")
+    return arr.ravel(order="F")
+
+
+def _flatten_vector(val, n, name):
+    """Return ``val`` as a float64 1-D array of exactly n entries."""
+    arr = np.asarray(val, dtype=np.float64)
+    if arr.ndim != 1 or arr.size != n:
+        raise DimensionError(f"{name} must be a 1-D array of {n} elements, "
+                             f"got shape {arr.shape}")
+    return arr
 
 
 class Scope:
@@ -179,7 +195,7 @@ class Scope:
 
     def set_values(self, array):
         """Set all variables at once from a flat array (declaration order)."""
-        self._values[:] = _flatten(array, self._values.size)
+        self._values[:] = _flatten_vector(array, self._values.size, "values")
         self._values_version += 1
 
     def get_values(self):
