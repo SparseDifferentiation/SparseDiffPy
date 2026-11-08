@@ -10,7 +10,7 @@ import numpy as np
 import scipy.sparse as sps
 
 from sparsediffpy import _sparsediffengine as _C
-from sparsediffpy._expression import Constant, Parameter, Variable, _wrap
+from sparsediffpy._expression import Constant, Parameter, Variable, _flatten, _wrap
 
 
 def _find_scope(exprs):
@@ -108,7 +108,10 @@ class Problem:
         self._param_version = self._scope._param_version
 
     def _u(self, u):
-        return self._scope._values if u is None else np.asarray(u, np.float64)
+        """Flat variable vector of length n_vars (the C side does not check it)."""
+        if u is None:
+            return self._scope._values[:self.n_vars]
+        return _flatten(u, self.n_vars)
 
     def objective_forward(self, u=None):
         """Objective value at u (default: the scope's current values)."""
@@ -152,8 +155,8 @@ class CompiledExpression:
         self._problem = Problem(Constant(0.0), [expr])
 
     def forward(self):
-        """f(x), flattened column-major."""
-        return self._problem.constraint_forward()
+        """f(x) as an array of shape f.shape."""
+        return self._problem.constraint_forward().reshape(self.shape, order="F")
 
     def jacobian(self):
         """Sparse Jacobian df/dx, shape (f.size, n_vars)."""

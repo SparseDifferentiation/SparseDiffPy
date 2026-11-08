@@ -26,14 +26,15 @@ f = sp.exp(x) + 2.0 * x        # build an expression with operators and sp.* ato
 fn = sp.compile(f)             # analyze sparsity once
 
 x.value = [1.0, 2.0, 3.0]
-print(fn.forward())            # [ 4.718  11.389  26.086]
+print(fn.forward())            # [[4.718] [11.389] [26.086]], shaped like f
 print(fn.jacobian().toarray()) # diag(exp(x) + 2), a 3x3 csr_matrix
 print(fn.hessian(np.ones(3)))  # Hessian of w' f(x) for weights w
 ```
 
-`jacobian()` has shape `(f.size, n_vars)` and `hessian(w)` has shape
-`(n_vars, n_vars)`, where `n_vars` is the total size of all variables in the
-scope, in declaration order. Values are flattened column-major.
+`forward()` has the shape of `f`, `jacobian()` has shape `(f.size, n_vars)`
+and `hessian(w)` has shape `(n_vars, n_vars)`, where `n_vars` is the total
+size of all variables in the scope, in declaration order. Flat vectors (the
+rows of the Jacobian, `x.value = [...]`, the weights `w`) are column-major.
 
 **Parameters** are data you can change without recompiling:
 
@@ -67,7 +68,7 @@ import sparsediffpy as sp
 # minimize  sum(exp(x) - c * x)   subject to   ||x||^2 <= 1
 scope = sp.Scope()
 x = scope.Variable(4, 1)
-c = np.array([1.0, 2.0, 3.0, 4.0])
+c = np.array([[1.0], [2.0], [3.0], [4.0]])   # constants are 2-D, like variables
 prob = sp.Problem(sp.sum(sp.exp(x) - c * x), [sp.sum(x ** 2)])
 
 def grad(u):
@@ -96,7 +97,8 @@ print(res.x)  # approx. [0. 0.289 0.549 0.784], on the boundary ||x|| = 1
 ## Supported operations
 
 - **Operators:** `+ - * @ **`, `.T`, and NumPy-style indexing (`x[1:3]`, `X[0, :]`, `X[[0, 2], 1]`).
-  Scalars, rows and columns broadcast. NumPy arrays and `scipy.sparse` matrices are accepted as constants.
+  Scalars, rows and columns broadcast. NumPy arrays and `scipy.sparse` matrices are accepted as
+  constants; like every expression they must be 2-D, so pass `a[:, None]` or `a[None, :]` for a 1-D `a`.
 - **Elementwise:** `sin cos tan exp log sinh tanh asinh atan atanh logistic normal_cdf entr xexp power atan2`.
 - **Affine:** `sum prod reshape broadcast hstack vstack trace diag_vec index_flat`.
 - **Other:** `quad_form quad_over_lin rel_entr`.

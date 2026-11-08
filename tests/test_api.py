@@ -40,7 +40,7 @@ def test_reevaluates_at_new_values(scope):
     fn = sp.compile(sp.exp(x))
     for v in ([0.0, 1.0], [2.0, -1.0]):
         x.value = v
-        np.testing.assert_allclose(fn.forward(), np.exp(v))
+        np.testing.assert_allclose(fn.forward(), np.exp(v)[:, None])
         np.testing.assert_allclose(fn.jacobian().diagonal(), np.exp(v))
         np.testing.assert_allclose(fn.hessian([1, 1]).diagonal(), np.exp(v))
 
@@ -49,9 +49,38 @@ def test_two_compiles_share_scope(scope):
     x, y = scope.Variable(2, 1), scope.Variable(2, 1)
     f, g = sp.compile(sp.sin(x)), sp.compile(x * y)
     scope.set_values([1.0, 2.0, 3.0, 4.0])
-    np.testing.assert_allclose(f.forward(), np.sin([1, 2]))
-    np.testing.assert_allclose(g.forward(), [3, 8])
+    np.testing.assert_allclose(f.forward(), np.sin([[1], [2]]))
+    np.testing.assert_allclose(g.forward(), [[3], [8]])
     assert f.jacobian().shape == g.jacobian().shape == (2, 4)
+
+
+def test_forward_has_expression_shape(scope):
+    x, M = scope.Variable(1, 3), scope.Variable(2, 2)
+    scope.set_values([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0])
+    assert sp.compile(2.0 * x).forward().shape == (1, 3)
+    out = sp.compile(sp.exp(M)).forward()
+    assert out.shape == (2, 2)
+    np.testing.assert_allclose(out, np.exp([[4.0, 6.0], [5.0, 7.0]]))  # column-major
+
+
+def test_constants_must_be_2d(scope):
+    x = scope.Variable(3, 1)
+    for bad in (np.ones(3), [1.0, 2.0, 3.0], np.zeros((2, 2, 2))):
+        with pytest.raises(ValueError, match="2-D"):
+            x + bad
+        with pytest.raises(ValueError, match="2-D"):
+            bad * x
+    assert (x + np.array([2.0])).shape == (x + 2.0).shape == (3, 1)
+    assert (x + np.ones((3, 1))).shape == (3, 1)
+
+
+def test_variable_declared_after_compile(scope):
+    x = scope.Variable(2, 1)
+    fn = sp.compile(sp.exp(x))
+    scope.Variable(3, 1)
+    x.value = [0.0, 1.0]
+    np.testing.assert_allclose(fn.forward(), np.exp([[0.0], [1.0]]))
+    assert fn.jacobian().shape == (2, 2)
 
 
 def test_affine_hessian_is_zero(scope):
@@ -128,7 +157,7 @@ def test_parameter_update_without_recompile(scope):
     x.value = [0.1, 0.2, 0.3]
     for Av, cv in [(np.ones((2, 3)), 1.0), (np.arange(6.0).reshape(2, 3), -2.0)]:
         A.value, c.value = Av, cv
-        np.testing.assert_allclose(fn.forward(), cv * np.exp(Av @ x.value).ravel())
+        np.testing.assert_allclose(fn.forward(), cv * np.exp(Av @ x.value))
         J = cv * np.exp(Av @ x.value) * Av
         np.testing.assert_allclose(fn.jacobian().toarray(), J)
 
@@ -139,7 +168,7 @@ def test_unset_parameter_raises(scope):
     with pytest.raises(ValueError, match="no value"):
         fn.forward()
     p.value = [1.0, 2.0]
-    np.testing.assert_allclose(fn.forward(), [0, 0])
+    np.testing.assert_allclose(fn.forward(), [[0], [0]])
 
 
 # --- Problem ----------------------------------------------------------------------
@@ -168,6 +197,12 @@ def test_problem(scope):
 
     with pytest.raises(ValueError, match="lagrange"):
         prob.hessian(1.0, np.ones(4))
+    for bad in (np.zeros(2), np.zeros(4)):
+        with pytest.raises(ValueError, match="expected 3 elements"):
+            prob.objective_forward(bad)
+        with pytest.raises(ValueError, match="expected 3 elements"):
+            prob.constraint_forward(bad)
+    assert prob.objective_forward(u[:, None]) == pytest.approx(np.exp(s).sum())
     with pytest.raises(ValueError, match="scalar"):
         sp.Problem(x)
 

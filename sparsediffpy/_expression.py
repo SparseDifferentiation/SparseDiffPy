@@ -91,11 +91,13 @@ class Constant(Expression):
             self.value = sps.csr_matrix(value, dtype=np.float64)
         else:
             value = np.asarray(value, dtype=np.float64)
-            if value.ndim > 2:
-                raise ValueError(f"Cannot wrap {value.ndim}D array as constant")
-            # scalars -> (1, 1), 1-D -> column vector
-            self.value = value.reshape(value.shape[0], -1) if value.ndim else \
-                value.reshape(1, 1)
+            if value.size == 1:
+                value = value.reshape(1, 1)
+            elif value.ndim != 2:
+                raise ValueError(
+                    f"Constants must be scalars or 2-D arrays, (n, 1) or (1, n); "
+                    f"got shape {value.shape}. Use a[:, None] or a[None, :].")
+            self.value = value
         self.shape = _check_shape(*self.value.shape)
 
     def dense(self):

@@ -67,7 +67,7 @@ def add_broadcast(s):
 @case()
 def neg_sub(s):
     x, y = s.Variable(3, 1), s.Variable(3, 1)
-    return -x - y + np.arange(3.0), lambda: -x.value - y.value + np.c_[0:3.0]
+    return -x - y + np.c_[0:3.0], lambda: -x.value - y.value + np.c_[0:3.0]
 
 
 @case()
@@ -230,8 +230,8 @@ def test_atom(name, rng):
     x0 = rng.uniform(low, high, scope.total_var_size)
     scope.set_values(x0)
     out = fn.forward()
-    assert out.shape == (f.size,)
+    assert out.shape == f.shape
     if ref is not None:
-        expected = np.broadcast_to(ref(), f.shape).ravel(order="F")
+        expected = np.broadcast_to(ref(), f.shape)
         np.testing.assert_allclose(out, expected, rtol=1e-10, atol=1e-12)
     check_derivatives(fn, scope, x0, rng.standard_normal(f.size))
