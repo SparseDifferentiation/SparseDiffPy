@@ -115,16 +115,32 @@ def test_parameter_update_after_compact():
     np.testing.assert_allclose(prob.constraint_forward(u), 5.0 * u)
 
 
-def test_deep_term_is_kept_as_is():
+def test_long_sum_is_reduced():
     x = sp.Scope().Variable(3000, 1)
     deep = x[0]
     for k in range(1, 3000):
         deep = deep + x[k]
     g, perm = sp.compact([deep, x[0] ** 2, x[1] ** 2])
-    assert perm is None and g.args[0] is deep
-    u = np.ones(3000)
+    assert perm is None and count_nodes(g.args[0]) == 3
+    u = np.arange(3000.0)
     np.testing.assert_allclose(sp.Problem(sp.sum(g), [g]).constraint_forward(u),
-                               [3000.0, 1.0, 1.0])
+                               [u.sum(), 0.0, 1.0])
+
+
+def test_accumulated_objective_matches(rng):
+    def build(scope, n):
+        x = scope.Variable(n + 1, 1)
+        f = 0.0
+        for k in range(n):
+            f = f + 100.0 * (x[k] ** 2 - x[k + 1]) ** 2 - (k + 1.0) * x[k]
+        return [f]
+    assert_compact(build, 8, rng)
+
+
+def test_unprofitable_sum_is_kept():
+    x = sp.Scope().Variable(2, 1)
+    t = x[0] ** 2 + sp.exp(x[1])
+    assert sp.compact([t])[0] is t
 
 
 def test_rejects_non_scalar_and_empty():
