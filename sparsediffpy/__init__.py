@@ -24,3 +24,4 @@ from sparsediffpy._atoms import (  # noqa: F401
     sinh, sum, tan, tanh, trace, vstack, xexp,
 )
 from sparsediffpy._compile import CompiledExpression, Problem, compile  # noqa: F401
+from sparsediffpy._compact import compact  # noqa: F401

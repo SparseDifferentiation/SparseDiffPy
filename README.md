@@ -101,6 +101,32 @@ res = minimize(prob.objective_forward, np.zeros(4), jac=grad, hess=obj_hess,
 print(res.x)  # approx. [0. 0.289 0.549 0.784], on the boundary ||x|| = 1
 ```
 
+## Models written as loops
+
+A model built term by term in a Python loop gives the engine one small scalar
+expression per term, which is much slower than the same model written with
+vectors. `sp.compact(terms)` is a drop-in for `sp.vstack(terms)` that merges
+terms with the same structure (differing only in which entries and constants
+they use) into one vector expression:
+
+```python
+import numpy as np
+
+import sparsediffpy as sp
+
+n = 1000
+scope = sp.Scope()
+x = scope.Variable(n, 1)
+f, _ = sp.compact([(x[k] - 1.0) ** 2 for k in range(n)])
+g, perm = sp.compact([x[k] ** 2 + x[k + 1] - 1.0 for k in range(n - 1)])
+prob = sp.Problem(sp.sum(f), [g])  # 2 vector expressions, not ~2000 scalar ones
+assert perm is None  # one template per list, so rows kept their order
+```
+
+When a list mixes templates, rows are grouped by template: row `j` of the result
+is `terms[perm[j]]`. Map row data such as bounds in with `values[perm]`, and
+multipliers back out with `out[perm] = lam`.
+
 ## Supported operations
 
 - **Operators:** `+ - * @ **`, `.T`, and indexing with ints, slices and integer lists: `x[1:3]` on a
