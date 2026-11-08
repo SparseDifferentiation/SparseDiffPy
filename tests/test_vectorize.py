@@ -4,7 +4,7 @@ import numpy as np
 import scipy.sparse as sps
 
 import sparsediffpy as sp
-from sparsediffpy._expression import Constant
+from sparsediffpy.expression import Constant
 
 
 def _evaluate(g, u, lam):
@@ -38,7 +38,7 @@ def test_loop_merges_into_one_vector(rng):
         return [3 * x[k + 1] ** 3 + 2 * x[k + 2] - x[k] * sp.exp(x[k] - x[k + 1])
                 for k in range(6)]
     g, perm = assert_matches_vstack(build, 8, rng)
-    assert perm is None and g.op != "vstack"  # a single template, in place
+    assert perm is None and g.opcode != "vstack"  # one instruction list, rows in place
 
 
 def test_varying_constants(rng):
@@ -48,7 +48,7 @@ def test_varying_constants(rng):
     assert_matches_vstack(build, 5, rng)
 
 
-def test_interleaved_templates_and_unsupported_terms(rng):
+def test_interleaved_groups_and_unsupported_terms(rng):
     A = rng.standard_normal((2, 6))
 
     def build(scope):
@@ -76,7 +76,7 @@ def test_shared_subexpression_and_parameter(rng):
     assert_matches_vstack(build, 5, rng)
 
 
-def test_templates_without_params(rng):
+def test_terms_without_args(rng):
     def build(scope):
         y = scope.Variable(1, 1)
         return [y, y, sp.exp(y), sp.exp(y)]

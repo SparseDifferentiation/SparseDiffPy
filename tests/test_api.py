@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 import sparsediffpy as sp
-from sparsediffpy import _compile
+from sparsediffpy import problem
 
 
 # --- scope and values ---------------------------------------------------------
@@ -278,13 +278,13 @@ def test_unset_parameter_raises(scope):
 # --- Caching ------------------------------------------------------------------------
 
 def count_calls(monkeypatch, name):
-    """Count calls to the engine function `name` as seen from _compile."""
-    calls, real = [], getattr(_compile._C, name)
+    """Count calls to the engine function `name` as seen from sparsediffpy.problem."""
+    calls, real = [], getattr(problem._C, name)
 
     def counted(*args):
         calls.append(1)
         return real(*args)
-    monkeypatch.setattr(_compile._C, name, counted)
+    monkeypatch.setattr(problem._C, name, counted)
     return calls
 
 

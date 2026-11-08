@@ -4,7 +4,7 @@ import numpy as np
 import scipy.sparse as sps
 
 from sparsediffpy import _sparsediffengine as _C
-from sparsediffpy._expression import (
+from sparsediffpy.expression import (
     Constant, Node, Parameter, Variable, _check_shape, _check_symmetric, _wrap,
 )
 

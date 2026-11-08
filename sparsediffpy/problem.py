@@ -10,7 +10,7 @@ import numpy as np
 import scipy.sparse as sps
 
 from sparsediffpy import _sparsediffengine as _C
-from sparsediffpy._expression import Constant, Parameter, Variable, _flatten_shaped, _flatten_vector, _wrap
+from sparsediffpy.expression import Constant, Parameter, Variable, _flatten_shaped, _flatten_vector, _wrap
 
 
 def _find_scope(exprs):
