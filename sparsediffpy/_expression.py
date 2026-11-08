@@ -284,7 +284,10 @@ def _axis_indices(key, n):
     if isinstance(key, slice):
         return np.arange(n)[key]
     if isinstance(key, (list, np.ndarray)):
-        key = np.asarray(key, dtype=np.int64)
+        key = np.asarray(key)
+        if key.ndim != 1 or not np.issubdtype(key.dtype, np.integer):
+            raise IndexError("Index arrays must be 1-D with integer entries "
+                             f"(got shape {key.shape}, dtype {key.dtype})")
         if key.size and (key.min() < -n or key.max() >= n):
             raise IndexError(f"Index out of range for axis of length {n}")
         return key % n
@@ -292,12 +295,16 @@ def _axis_indices(key, n):
 
 
 def _index(x, key):
+    """x[i, j] on anything; x[i] only on vectors, where it indexes along the axis."""
     d1, d2 = x.shape
     if isinstance(key, tuple):
         if len(key) != 2:
-            raise IndexError("Only 1D or 2D indexing supported")
+            raise IndexError(f"Expected 2 indices for shape {x.shape}, got {len(key)}")
         rows, cols = _axis_indices(key[0], d1), _axis_indices(key[1], d2)
         flat = (rows[:, None] + cols[None, :] * d1).ravel(order="F")
         return index_flat(x, flat, (rows.size, cols.size))
-    flat = _axis_indices(key, x.size)  # column-major flat index
+    if d1 > 1 and d2 > 1:
+        raise IndexError(f"A single index on shape {x.shape} is ambiguous; "
+                         "use X[i, j], X[i, :] or X[:, j]")
+    flat = _axis_indices(key, x.size)
     return index_flat(x, flat, (1, flat.size) if d1 == 1 else (flat.size, 1))

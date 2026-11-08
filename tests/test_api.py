@@ -139,6 +139,20 @@ def test_index_out_of_range(scope, key):
         X[key]
 
 
+def test_index_must_be_explicit(scope):
+    x, X = scope.Variable(4, 1), scope.Variable(2, 3)
+    for key in (1, slice(0, 2), [0, 1]):
+        with pytest.raises(IndexError, match="ambiguous"):
+            X[key]
+    assert X[1, :].shape == (1, 3) and X[:, 1].shape == (2, 1)
+    with pytest.raises(IndexError, match="integer"):
+        x[[True, False, True, False]]
+    with pytest.raises(IndexError, match="1-D"):
+        x[np.array([[0, 1]])]
+    with pytest.raises(IndexError, match="2 indices"):
+        X[0, 0, 0]
+
+
 def test_compile_errors(scope):
     with pytest.raises(ValueError, match="at least one Variable"):
         sp.compile(sp.Scope().Parameter(1, 1, value=1.0) * 2.0)
