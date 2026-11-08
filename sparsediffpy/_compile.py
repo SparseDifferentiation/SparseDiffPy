@@ -33,16 +33,36 @@ def _find_scope(exprs):
 
 
 class _Builder:
-    """Builds C capsules bottom-up, sharing repeated subexpressions."""
+    """Builds C capsules bottom-up, sharing repeated subexpressions.
+
+    The walk uses an explicit stack rather than recursion, so deep expressions
+    (e.g. a long sum built in a Python loop) do not hit Python's recursion
+    limit. Nodes are built in the same order as a recursive left-to-right
+    post-order traversal.
+    """
 
     def __init__(self, scope):
         self.n_vars = scope.total_var_size
         self.cache = {}
         self.params = []  # (Parameter, capsule), each once
 
-    def __call__(self, e):
-        if id(e) in self.cache:
-            return self.cache[id(e)]
+    def __call__(self, root):
+        stack = [root]
+        while stack:
+            e = stack[-1]
+            if id(e) in self.cache:
+                stack.pop()
+                continue
+            pending = [a for a in e.args if id(a) not in self.cache]
+            if pending:
+                stack.extend(reversed(pending))  # build the leftmost child first
+                continue
+            stack.pop()
+            self.cache[id(e)] = self._build_one(e)
+        return self.cache[id(root)]
+
+    def _build_one(self, e):
+        """Build e's capsule; all of e's children must already be cached."""
         d1, d2 = e.shape
         if isinstance(e, Variable):
             cap = _C.make_variable(d1, d2, e._offset, self.n_vars)
@@ -54,11 +74,10 @@ class _Builder:
             values = e.dense().ravel(order="F")
             cap = _C.make_parameter(d1, d2, -1, self.n_vars, values)
         else:
-            cap = e.make(*[self(a) for a in e.args])
+            cap = e.make(*[self.cache[id(a)] for a in e.args])
         if _C.get_expr_dimensions(cap) != e.shape:
             raise ValueError(f"Engine shape {_C.get_expr_dimensions(cap)} != "
                              f"expected {e.shape}")
-        self.cache[id(e)] = cap
         return cap
 
 

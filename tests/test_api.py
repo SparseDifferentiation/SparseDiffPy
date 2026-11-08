@@ -1,5 +1,7 @@
 """Scope/values, shape rules, validation errors, parameters, and Problem."""
 
+import sys
+
 import numpy as np
 import pytest
 
@@ -374,3 +376,61 @@ def test_hessian_without_prior_jacobian(scope):
         H_prob = np.block([[np.zeros((2, 2)), np.diag(2.0 + w)],
                            [np.diag(2.0 + w), np.zeros((2, 2))]])
         np.testing.assert_allclose(prob.hessian(2.0, w).toarray(), H_prob, atol=1e-12)
+
+
+# --- deep expressions -------------------------------------------------------------
+
+def test_compile_deep_sum(scope):
+    """A sum built term by term in a loop is a chain deeper than the recursion limit."""
+    x, p = scope.Variable(3, 1), scope.Parameter(1, 1, value=2.0)
+    n_terms = 5000
+    assert n_terms > sys.getrecursionlimit()  # each term adds one level
+    f = x[0]
+    for i in range(1, n_terms + 1):
+        f = f + p * sp.sin(x[i % 3])
+    fn = sp.compile(f)
+    u = np.array([0.3, -0.7, 1.1])
+    x.value = u
+    counts = np.bincount(np.arange(1, n_terms + 1) % 3, minlength=3)
+    for pv in (2.0, 3.0):
+        p.value = pv
+        np.testing.assert_allclose(fn.forward(), [[u[0] + pv * counts @ np.sin(u)]])
+        np.testing.assert_allclose(fn.jacobian().toarray(),
+                                   [np.eye(3)[0] + pv * counts * np.cos(u)])
+        np.testing.assert_allclose(fn.hessian(1.0).toarray(),
+                                   np.diag(-pv * counts * np.sin(u)), atol=1e-9)
+
+
+def test_compile_deep_nonlinear_chain(scope):
+    """A deep chain of nonlinear atoms that all reuse one shared subexpression.
+
+    The shared node is shallow on purpose: the engine re-evaluates a shared
+    subexpression once per use, so reusing a deep one would take exponential time.
+    """
+    x = scope.Variable(1, 1)
+    n_levels, c = 3000, 1e-3
+    shared = sp.sin(x)
+    g = x
+    for _ in range(n_levels):
+        g = sp.sin(g) + c * shared
+
+    x0 = 0.7
+    v, d1, d2 = x0, 1.0, 0.0  # g, dg/dx, d2g/dx2 by the chain rule
+    for _ in range(n_levels):
+        d2 = np.cos(v) * d2 - np.sin(v) * d1 ** 2 - c * np.sin(x0)
+        d1 = np.cos(v) * d1 + c * np.cos(x0)
+        v = np.sin(v) + c * np.sin(x0)
+
+    x.value = x0
+    fn = sp.compile(g)
+    np.testing.assert_allclose(fn.forward(), [[v]], rtol=1e-12)
+    np.testing.assert_allclose(fn.jacobian().toarray(), [[d1]], rtol=1e-10)
+    np.testing.assert_allclose(fn.hessian(1.0).toarray(), [[d2]], rtol=1e-8)
+
+    prob = sp.Problem(sp.sum(g), [g])
+    u = np.array([x0])
+    assert prob.objective_forward(u) == pytest.approx(v, rel=1e-12)
+    np.testing.assert_allclose(prob.gradient(), [d1], rtol=1e-10)
+    np.testing.assert_allclose(prob.constraint_forward(u), [v], rtol=1e-12)
+    np.testing.assert_allclose(prob.jacobian().toarray(), [[d1]], rtol=1e-10)
+    np.testing.assert_allclose(prob.hessian(1.0, [2.0]).toarray(), [[3 * d2]], rtol=1e-8)
