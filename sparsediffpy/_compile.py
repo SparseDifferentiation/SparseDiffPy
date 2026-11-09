@@ -10,7 +10,7 @@ import numpy as np
 import scipy.sparse as sps
 
 from sparsediffpy import _sparsediffengine as _C
-from sparsediffpy._expression import Constant, Parameter, Variable, _flatten_shaped, _flatten_vector, _wrap
+from sparsediffpy._expression import Constant, Parameter, Variable, _flatten_shaped, _flatten_vector, cast_to_const
 
 
 def _find_scope(exprs):
@@ -102,8 +102,8 @@ class Problem:
     """
 
     def __init__(self, objective, constraints=(), verbose=False):
-        objective = _wrap(objective)
-        constraints = [_wrap(c) for c in constraints]
+        objective = cast_to_const(objective)
+        constraints = [cast_to_const(c) for c in constraints]
         if objective.shape != (1, 1):
             raise ValueError(f"Objective must be scalar, got {objective.shape}")
         self._scope = _find_scope([objective, *constraints])
@@ -233,4 +233,4 @@ class CompiledExpression:
 
 def compile(expr):
     """Analyze the sparsity of ``expr`` once and return a CompiledExpression."""
-    return CompiledExpression(_wrap(expr))
+    return CompiledExpression(cast_to_const(expr))

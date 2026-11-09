@@ -41,31 +41,31 @@ class Expression:
         return Node(_C.make_transpose, [self], self.shape[::-1])
 
     def __add__(self, other):
-        return _add(self, _wrap(other))
+        return _add(self, cast_to_const(other))
 
     def __radd__(self, other):
-        return _add(_wrap(other), self)
+        return _add(cast_to_const(other), self)
 
     def __sub__(self, other):
-        return _add(self, -_wrap(other))
+        return _add(self, -cast_to_const(other))
 
     def __rsub__(self, other):
-        return _add(_wrap(other), -self)
+        return _add(cast_to_const(other), -self)
 
     def __neg__(self):
         return Node(_C.make_neg, [self], self.shape)
 
     def __mul__(self, other):
-        return _mul(self, _wrap(other))
+        return _mul(self, cast_to_const(other))
 
     def __rmul__(self, other):
-        return _mul(_wrap(other), self)
+        return _mul(cast_to_const(other), self)
 
     def __matmul__(self, other):
-        return _matmul(self, _wrap(other))
+        return _matmul(self, cast_to_const(other))
 
     def __rmatmul__(self, other):
-        return _matmul(_wrap(other), self)
+        return _matmul(cast_to_const(other), self)
 
     def __pow__(self, p):
         if not isinstance(p, numbers.Real):
@@ -223,7 +223,8 @@ class Scope:
         return self._values.copy()
 
 
-def _wrap(value):
+def cast_to_const(value):
+    """Return ``value`` as an Expression, wrapping non-Expressions in a Constant."""
     return value if isinstance(value, Expression) else Constant(value)
 
 
@@ -246,7 +247,7 @@ def _broadcast_shape(a, b):
 
 def broadcast(x, shape):
     """Broadcast a scalar, row or column expression to ``shape``."""
-    x, shape = _wrap(x), _check_shape(*shape)
+    x, shape = cast_to_const(x), _check_shape(*shape)
     if x.shape == shape:
         return x
     if _broadcast_shape(x.shape, shape) != shape:
@@ -304,7 +305,7 @@ def _matmul_with_data(make, A):
 
 def index_flat(x, flat_indices, shape):
     """Gather entries of ``x`` by column-major flat indices into ``shape``."""
-    x = _wrap(x)
+    x = cast_to_const(x)
     idx = np.asarray(flat_indices, dtype=np.int32).ravel()
     shape = _check_shape(*shape)
     if idx.size != shape[0] * shape[1]:

@@ -5,7 +5,8 @@ import scipy.sparse as sps
 
 from sparsediffpy import _sparsediffengine as _C
 from sparsediffpy._expression import (
-    Constant, Node, Parameter, Variable, _check_shape, _check_symmetric, _wrap,
+    Constant, Node, Parameter, Variable, _check_shape, _check_symmetric,
+    cast_to_const,
 )
 
 
@@ -20,7 +21,7 @@ def _require_variables(name, *xs):
 
 def _elementwise(make, name, restricted=False):
     def atom(x):
-        x = _wrap(x)
+        x = cast_to_const(x)
         if restricted:
             _require_variables(name, x)
         return Node(make, [x], x.shape)
@@ -47,7 +48,7 @@ xexp = _elementwise(_C.make_xexp, "xexp")
 
 def power(x, p):
     """Elementwise x ** p for a constant exponent p."""
-    return _wrap(x) ** p
+    return cast_to_const(x) ** p
 
 
 def atan2(y, x):
@@ -69,7 +70,7 @@ def _reduction_shape(x, axis):
 
 def sum(x, axis=None):
     """Sum of all entries (axis=None) -> (1, 1); axis=0 -> (1, d2); axis=1 -> (1, d1)."""
-    x = _wrap(x)
+    x = cast_to_const(x)
     shape = _reduction_shape(x, axis)
     c_axis = -1 if axis is None else axis
     return Node(lambda c: _C.make_sum(c, c_axis), [x], shape)
@@ -88,14 +89,14 @@ def prod(x, axis=None):
 
 def reshape(x, d1, d2):
     """Column-major reshape."""
-    x, shape = _wrap(x), _check_shape(d1, d2)
+    x, shape = cast_to_const(x), _check_shape(d1, d2)
     if x.size != shape[0] * shape[1]:
         raise ValueError(f"Cannot reshape {x.shape} to {shape}")
     return Node(lambda c: _C.make_reshape(c, *shape), [x], shape)
 
 
 def trace(x):
-    x = _wrap(x)
+    x = cast_to_const(x)
     if x.shape[0] != x.shape[1]:
         raise ValueError(f"trace requires a square matrix, got {x.shape}")
     return Node(_C.make_trace, [x], (1, 1))
@@ -103,7 +104,7 @@ def trace(x):
 
 def diag_vec(x):
     """(n, 1) column vector -> (n, n) diagonal matrix."""
-    x = _wrap(x)
+    x = cast_to_const(x)
     if x.shape[1] != 1:
         raise ValueError(f"diag_vec requires a column vector, got {x.shape}")
     return Node(_C.make_diag_vec, [x], (x.shape[0], x.shape[0]))
@@ -111,7 +112,7 @@ def diag_vec(x):
 
 def hstack(exprs):
     """Concatenate horizontally; all arguments need the same number of rows."""
-    exprs = [_wrap(e) for e in exprs]
+    exprs = [cast_to_const(e) for e in exprs]
     if not exprs or len({e.shape[0] for e in exprs}) != 1:
         raise ValueError(f"hstack: need >=1 args with equal rows, got "
                          f"{[e.shape for e in exprs]}")
@@ -121,7 +122,7 @@ def hstack(exprs):
 
 def vstack(exprs):
     """Concatenate vertically; all arguments need the same number of columns."""
-    exprs = [_wrap(e) for e in exprs]
+    exprs = [cast_to_const(e) for e in exprs]
     if not exprs or len({e.shape[1] for e in exprs}) != 1:
         raise ValueError(f"vstack: need >=1 args with equal columns, got "
                          f"{[e.shape for e in exprs]}")
@@ -136,7 +137,7 @@ def quad_form(x, Q):
     path. Constant Q is symmetrized; a Parameter Q must be symmetric, which is
     checked here and on every later ``Q.value`` update.
     """
-    x, Q = _wrap(x), _wrap(Q)
+    x, Q = cast_to_const(x), cast_to_const(Q)
     n = x.shape[0]
     if x.shape[1] != 1 or Q.shape != (n, n):
         raise ValueError(f"quad_form: need x (n, 1) and Q (n, n), "
