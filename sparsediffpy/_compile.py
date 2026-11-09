@@ -107,13 +107,17 @@ class Problem:
         if objective.shape != (1, 1):
             raise ValueError(f"Objective must be scalar, got {objective.shape}")
         self._scope = _find_scope([objective, *constraints])
-        build = _Builder(self._scope)
-        obj_cap = build(objective)
-        con_caps = [build(c) for c in constraints]
+        # The objective and the constraints are evaluated at separate points, so
+        # they must not share engine nodes: a constraint_forward would overwrite
+        # values that the objective's gradient still reads.
+        obj_build, con_build = _Builder(self._scope), _Builder(self._scope)
+        obj_cap = obj_build(objective)
+        con_caps = [con_build(c) for c in constraints]
         self._capsule = _C.make_problem(obj_cap, con_caps, verbose)
-        self._params = [p for p, _ in build.params]
-        if build.params:
-            _C.problem_register_params(self._capsule, [c for _, c in build.params])
+        params = obj_build.params + con_build.params
+        self._params = [p for p, _ in params]
+        if params:
+            _C.problem_register_params(self._capsule, [c for _, c in params])
         _C.problem_init_derivatives(self._capsule)
         self._param_version = None
         self.n_vars = self._scope.total_var_size

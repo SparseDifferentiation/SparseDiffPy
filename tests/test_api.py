@@ -404,6 +404,16 @@ def test_problem_parameters(scope):
     np.testing.assert_allclose(prob.gradient(), u)
 
 
+def test_objective_and_constraints_at_different_points(scope):
+    x, a = scope.Variable(3, 1), scope.Parameter(1, 1, value=2.0)
+    e = sp.exp(a * x)  # shared by the objective and the constraint
+    prob = sp.Problem(sp.sum(e), [e])
+    prob.objective_forward(np.zeros(3))
+    prob.constraint_forward(np.ones(3))
+    np.testing.assert_allclose(prob.gradient(), [2.0, 2.0, 2.0])
+    np.testing.assert_allclose(prob.jacobian().diagonal(), 2 * np.exp([2.0] * 3))
+
+
 def test_hessian_without_prior_jacobian(scope):
     """hessian() must refresh the Jacobian values the engine's Hessian reuses."""
     x, y = scope.Variable(2, 1), scope.Variable(2, 1)
