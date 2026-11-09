@@ -123,8 +123,8 @@ def _build(problem):
     n, vec, scalar = problem
     f, g = vec(sp.Scope().Variable(n, 1))
     ref = sp.Problem(0.0 if f is None else f, [g])
-    f_terms, g_terms = scalar(sp.Scope().Variable(n, 1))
-    p = sp.Problem(0.0 if f_terms is None else sum(f_terms), g_terms)
+    f_exprs, g_exprs = scalar(sp.Scope().Variable(n, 1))
+    p = sp.Problem(0.0 if f_exprs is None else sum(f_exprs), g_exprs)
     return n, ref, p
 
 
@@ -163,7 +163,7 @@ def test_graph_size_does_not_grow(make, size):
     f1, g1 = _graph_sizes(_build(make(size))[2])
     f2, g2 = _graph_sizes(_build(make(2 * size))[2])
     assert g1 == g2
-    if make is not logreg:  # its objective has a dense row per term
+    if make is not logreg:  # its objective uses a dense row of A per expression
         assert f1 == f2
 
 
@@ -176,8 +176,8 @@ def test_interleaved_rows_keep_their_order():
 
 def test_problem_shrinks_the_graph():
     n, _, scalar = luksan(200)
-    f_terms, g_terms = scalar(sp.Scope().Variable(n, 1))
-    p = sp.Problem(sum(f_terms), g_terms)
+    f_exprs, g_exprs = scalar(sp.Scope().Variable(n, 1))
+    p = sp.Problem(sum(f_exprs), g_exprs)
     f, g = _graph_sizes(p)
-    assert 50 * f < count_nodes(sum(f_terms))
-    assert 50 * sum(g) < count_nodes(sp.vstack(g_terms))
+    assert 50 * f < count_nodes(sum(f_exprs))
+    assert 50 * sum(g) < count_nodes(sp.vstack(g_exprs))
