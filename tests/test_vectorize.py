@@ -1,4 +1,4 @@
-"""compact(terms) must merge what it can and match vstack(terms) exactly."""
+"""compact(exprs) must merge what it can and match vstack(exprs) exactly."""
 
 import numpy as np
 import pytest
@@ -17,20 +17,20 @@ def _evaluate(g, u, lam):
 
 
 def assert_compact(build, n, rng):
-    """build(scope, n) -> scalar terms over n + extra variables.
+    """build(scope, n) -> scalar expressions over n + extra variables.
 
-    The compacted graph must not grow with n (the terms were merged), and
-    value, gradient, Jacobian and Hessian must match vstack(terms), with rows
+    The compacted graph must not grow with n (the expressions were merged), and
+    value, gradient, Jacobian and Hessian must match vstack(exprs), with rows
     mapped by perm.
     """
     assert count_nodes(sp.compact(build(sp.Scope(), n))[0]) == \
         count_nodes(sp.compact(build(sp.Scope(), 2 * n))[0])
 
     scope = sp.Scope()
-    terms = build(scope, n)
+    exprs = build(scope, n)
     u = rng.uniform(0.5, 1.5, scope.total_var_size)
-    lam = rng.standard_normal(len(terms))
-    f, grad, c, J, H = _evaluate(sp.vstack(terms), u, lam)
+    lam = rng.standard_normal(len(exprs))
+    f, grad, c, J, H = _evaluate(sp.vstack(exprs), u, lam)
 
     g, perm = sp.compact(build(sp.Scope(), n))
     rows = slice(None) if perm is None else perm
@@ -57,17 +57,17 @@ def test_varying_constants(rng):
     assert_compact(build, 5, rng)
 
 
-def test_interleaved_groups_and_unsupported_terms(rng):
+def test_interleaved_groups_and_unsupported_exprs(rng):
     A = rng.standard_normal((2, 6))
 
     def build(scope, n):
         x, z = scope.Variable(n + 1, 1), scope.Variable(6, 1)
-        terms = []
+        exprs = []
         for k in range(n):
-            terms += [sp.sin(x[k]) * x[k + 1], x[k] ** 2 - 2.0 * k]
-        terms += [sp.exp(Constant(A[:1]) @ z),
+            exprs += [sp.sin(x[k]) * x[k + 1], x[k] ** 2 - 2.0 * k]
+        exprs += [sp.exp(Constant(A[:1]) @ z),
                   sp.exp(Constant(sps.csr_matrix(A[1:])) @ z)]
-        return terms
+        return exprs
     perm = assert_compact(build, 5, rng)
     assert list(perm) == [0, 2, 4, 6, 8, 1, 3, 5, 7, 9, 10, 11]
 
@@ -76,15 +76,15 @@ def test_shared_subexpression_and_parameter(rng):
     def build(scope, n):
         x = scope.Variable(n + 1, 1)
         p = scope.Parameter(1, 1, value=2.5)
-        terms = []
+        exprs = []
         for k in range(n):
             d = x[k] - x[k + 1]
-            terms.append(p * d * d + sp.tanh(d))
-        return terms
+            exprs.append(p * d * d + sp.tanh(d))
+        return exprs
     assert_compact(build, 4, rng)
 
 
-def test_terms_without_args(rng):
+def test_exprs_without_args(rng):
     def build(scope, n):
         y = scope.Variable(1, 1)
         return [y] * n + [sp.exp(y) for _ in range(n)]
@@ -94,8 +94,8 @@ def test_terms_without_args(rng):
 def test_different_structure_does_not_merge(rng):
     scope = sp.Scope()
     x, z = scope.Variable(3, 1), scope.Variable(3, 1)
-    terms = [x[0] ** 2, x[1] ** 2, z[0] ** 2, x[2] ** 3, x[0] * x[1], x[1] * x[1]]
-    g, perm = sp.compact(terms)
+    exprs = [x[0] ** 2, x[1] ** 2, z[0] ** 2, x[2] ** 3, x[0] * x[1], x[1] * x[1]]
+    g, perm = sp.compact(exprs)
     assert perm is None
     a, b, c, d = rng.uniform(0.5, 1.5, 4)
     u = np.array([a, b, c, d, 0.0, 0.0])
@@ -115,7 +115,7 @@ def test_parameter_update_after_compact():
     np.testing.assert_allclose(prob.constraint_forward(u), 5.0 * u)
 
 
-def test_deep_term_is_kept_as_is():
+def test_deep_expr_is_kept_as_is():
     x = sp.Scope().Variable(3000, 1)
     deep = x[0]
     for k in range(1, 3000):

@@ -123,8 +123,8 @@ def _build(problem):
     n, vec, scalar = problem
     f, g = vec(sp.Scope().Variable(n, 1))
     ref = sp.Problem(0.0 if f is None else f, [g])
-    f_terms, g_terms = scalar(sp.Scope().Variable(n, 1))
-    p = sp.Problem(0.0 if f_terms is None else sum(f_terms), g_terms)
+    f_exprs, g_exprs = scalar(sp.Scope().Variable(n, 1))
+    p = sp.Problem(0.0 if f_exprs is None else sum(f_exprs), g_exprs)
     return n, ref, p
 
 
@@ -173,6 +173,6 @@ def test_interleaved_rows_keep_their_order():
 
 def test_problem_shrinks_the_graph():
     n, _, scalar = luksan(200)
-    g_terms = scalar(sp.Scope().Variable(n, 1))[1]
-    p = sp.Problem(0.0, g_terms)
-    assert 50 * sum(_constraint_sizes(p)) < count_nodes(sp.vstack(g_terms))
+    g_exprs = scalar(sp.Scope().Variable(n, 1))[1]
+    p = sp.Problem(0.0, g_exprs)
+    assert 50 * sum(_constraint_sizes(p)) < count_nodes(sp.vstack(g_exprs))
