@@ -19,6 +19,12 @@ static PyObject *py_problem_gradient(PyObject *self, PyObject *args)
         return NULL;
     }
 
+    if (!prob->jacobian)
+    {
+        PyErr_SetString(PyExc_RuntimeError, "call problem_init_derivatives first");
+        return NULL;
+    }
+
     problem_gradient(prob);
 
     npy_intp size = prob->n_vars;

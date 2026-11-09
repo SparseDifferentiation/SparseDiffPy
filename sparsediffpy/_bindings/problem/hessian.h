@@ -34,9 +34,15 @@ static PyObject *py_problem_hessian(PyObject *self, PyObject *args)
         return NULL;
     }
 
+    if (!prob->lagrange_hessian)
+    {
+        PyErr_SetString(PyExc_RuntimeError, "call problem_init_derivatives first");
+        return NULL;
+    }
+
     /* Convert lagrange to contiguous C array */
-    PyArrayObject *lagrange_arr = (PyArrayObject *) PyArray_FROM_OTF(
-        lagrange_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+    PyArrayObject *lagrange_arr = double_array_of_size(
+        lagrange_obj, prob->total_constraint_size, 0, "lagrange");
     if (!lagrange_arr)
     {
         return NULL;
@@ -182,9 +188,16 @@ static PyObject *py_problem_eval_hessian_vals_coo(PyObject *self, PyObject *args
         return NULL;
     }
 
+    if (!prob->lagrange_hessian_coo)
+    {
+        PyErr_SetString(PyExc_RuntimeError,
+                        "call problem_init_hessian_coo_lower_triangular first");
+        return NULL;
+    }
+
     /* Convert lagrange to contiguous C array */
-    PyArrayObject *lagrange_arr = (PyArrayObject *) PyArray_FROM_OTF(
-        lagrange_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+    PyArrayObject *lagrange_arr = double_array_of_size(
+        lagrange_obj, prob->total_constraint_size, 0, "lagrange");
     if (!lagrange_arr)
     {
         return NULL;

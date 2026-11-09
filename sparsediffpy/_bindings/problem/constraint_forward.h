@@ -20,8 +20,7 @@ static PyObject *py_problem_constraint_forward(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    PyArrayObject *u_array =
-        (PyArrayObject *) PyArray_FROM_OTF(u_obj, NPY_DOUBLE, NPY_ARRAY_IN_ARRAY);
+    PyArrayObject *u_array = double_array_of_size(u_obj, prob->n_vars, 0, "u");
     if (!u_array)
     {
         return NULL;

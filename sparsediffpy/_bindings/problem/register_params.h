@@ -49,6 +49,14 @@ static PyObject *py_problem_register_params(PyObject *self, PyObject *args)
                             "invalid parameter capsule in list");
             return NULL;
         }
+        /* the engine calls exit(1) on a constant node */
+        if (((parameter_expr *) node)->param_id == PARAM_FIXED)
+        {
+            free(param_nodes);
+            PyErr_SetString(PyExc_ValueError,
+                            "constant node passed as a parameter");
+            return NULL;
+        }
         param_nodes[i] = node;
     }
 

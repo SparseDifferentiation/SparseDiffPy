@@ -19,6 +19,12 @@ static PyObject *py_problem_jacobian(PyObject *self, PyObject *args)
         return NULL;
     }
 
+    if (!prob->jacobian)
+    {
+        PyErr_SetString(PyExc_RuntimeError, "call problem_init_derivatives first");
+        return NULL;
+    }
+
     if (prob->n_constraints == 0)
     {
         /* Return empty CSR components */
@@ -158,6 +164,12 @@ static PyObject *py_problem_eval_jacobian_vals(PyObject *self, PyObject *args)
     if (!prob)
     {
         PyErr_SetString(PyExc_ValueError, "invalid problem capsule");
+        return NULL;
+    }
+
+    if (!prob->jacobian)
+    {
+        PyErr_SetString(PyExc_RuntimeError, "call problem_init_derivatives first");
         return NULL;
     }
 
