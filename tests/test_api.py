@@ -275,7 +275,7 @@ def test_unset_parameter_raises(scope):
     np.testing.assert_allclose(fn.forward(), [[0], [0]])
 
 
-# --- Caching ------------------------------------------------------------------------
+# --- Caching ------------------------------------------------------------------
 
 def count_calls(monkeypatch, name):
     """Count calls to the engine function `name` as seen from _compile."""
@@ -405,7 +405,7 @@ def test_problem_parameters(scope):
 
 
 def test_hessian_without_prior_jacobian(scope):
-    """The engine's Hessian reuses cached Jacobian values; hessian() must refresh them."""
+    """hessian() must refresh the Jacobian values the engine's Hessian reuses."""
     x, y = scope.Variable(2, 1), scope.Variable(2, 1)
     fn = sp.compile(x * y + sp.sin(x * y))
     prob = sp.Problem(sp.sum(x * y), [x * y])
@@ -415,31 +415,32 @@ def test_hessian_without_prior_jacobian(scope):
         w = np.array([1.0, 2.0])
         # d2/dx_i dy_i of w_i * (x_i y_i + sin(x_i y_i))
         d2 = lambda a, b: w * (-np.sin(xy) * a * b)  # noqa: E731
-        H = np.block([[np.diag(d2(yv, yv)), np.diag(w * (1 + np.cos(xy)) + d2(xv, yv))],
-                      [np.diag(w * (1 + np.cos(xy)) + d2(xv, yv)), np.diag(d2(xv, xv))]])
+        off = np.diag(w * (1 + np.cos(xy)) + d2(xv, yv))
+        H = np.block([[np.diag(d2(yv, yv)), off], [off, np.diag(d2(xv, xv))]])
         np.testing.assert_allclose(fn.hessian(w).toarray(), H, atol=1e-12)
 
         prob.objective_forward(u)
         prob.constraint_forward(u)
         H_prob = np.block([[np.zeros((2, 2)), np.diag(2.0 + w)],
                            [np.diag(2.0 + w), np.zeros((2, 2))]])
-        np.testing.assert_allclose(prob.hessian(2.0, w).toarray(), H_prob, atol=1e-12)
+        np.testing.assert_allclose(prob.hessian(2.0, w).toarray(), H_prob,
+                                   atol=1e-12)
 
 
 # --- deep expressions -------------------------------------------------------------
 
 def test_compile_deep_sum(scope):
-    """A sum built term by term in a loop is a chain deeper than the recursion limit."""
+    """A loop-built sum is a chain of adds deeper than the recursion limit."""
     x, p = scope.Variable(3, 1), scope.Parameter(1, 1, value=2.0)
-    n_terms = 5000
-    assert n_terms > sys.getrecursionlimit()  # each term adds one level
+    n_adds = 5000
+    assert n_adds > sys.getrecursionlimit()  # each add is one level deeper
     f = x[0]
-    for i in range(1, n_terms + 1):
+    for i in range(1, n_adds + 1):
         f = f + p * sp.sin(x[i % 3])
     fn = sp.compile(f)
     u = np.array([0.3, -0.7, 1.1])
     x.value = u
-    counts = np.bincount(np.arange(1, n_terms + 1) % 3, minlength=3)
+    counts = np.bincount(np.arange(1, n_adds + 1) % 3, minlength=3)
     for pv in (2.0, 3.0):
         p.value = pv
         np.testing.assert_allclose(fn.forward(), [[u[0] + pv * counts @ np.sin(u)]])
@@ -481,4 +482,5 @@ def test_compile_deep_nonlinear_chain(scope):
     np.testing.assert_allclose(prob.gradient(), [d1], rtol=1e-10)
     np.testing.assert_allclose(prob.constraint_forward(u), [v], rtol=1e-12)
     np.testing.assert_allclose(prob.jacobian().toarray(), [[d1]], rtol=1e-10)
-    np.testing.assert_allclose(prob.hessian(1.0, [2.0]).toarray(), [[3 * d2]], rtol=1e-8)
+    np.testing.assert_allclose(prob.hessian(1.0, [2.0]).toarray(), [[3 * d2]],
+                               rtol=1e-8)
