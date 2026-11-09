@@ -1,8 +1,8 @@
-"""Merge scalar terms written in a Python loop into vector expressions.
+"""Merge scalar expressions written in a Python loop into vector expressions.
 
 A loop such as ``[x[k] ** 2 + x[k + 1] - 1 for k in range(n - 1)]`` gives the
-engine one small expression per term. :func:`compact` lowers each term to a
-short list of instructions, in the style of LLVM IR::
+engine one small expression per term. :func:`compact` lowers each expression
+to a short list of instructions, in the style of LLVM IR::
 
     %0 = load x        ; arg: the index k
     %1 = power 2.0 %0
@@ -12,11 +12,11 @@ short list of instructions, in the style of LLVM IR::
     %5 = neg %4
     %6 = add %3 %5
 
-Terms whose instructions are identical differ only in their args, so each such
+Expressions whose instructions are identical differ only in their args, so each such
 group is rebuilt once as a vector expression: a ``load`` becomes a gather of
 ``x`` at the args, a ``const`` becomes a constant vector.
 
-A term that merges with no other term may itself be a long sum, such as
+An expression that merges with no other may itself be a long sum, such as
 ``t = t + x[k]`` accumulated in a loop. Like LLVM's horizontal reduction, its
 chain of adds is flattened into operands, which are compacted and summed:
 ``sum(compact(operands))``. This is kept only if the graph gets smaller, and
@@ -35,39 +35,39 @@ _UNARY = {"sin", "cos", "exp", "sinh", "tanh", "asinh", "atan", "logistic",
           "normal_cdf", "xexp"}
 
 
-class UnsupportedTermError(Exception):
-    """Raised when a term uses an operation that cannot be vectorized."""
+class UnsupportedExprError(Exception):
+    """Raised when an expression uses an operation that cannot be vectorized."""
 
 
-def compact(terms):
-    """Stack scalar terms into a column vector, merging terms of the same form.
+def compact(exprs):
+    """Stack scalar expressions into a column vector, merging those of the same form.
 
-    ``terms`` is typically the list of scalar objective or constraint terms
+    ``exprs`` is typically the list of scalar objective or constraint terms
     built in a Python loop, such as
-    ``[x[k] ** 2 + x[k + 1] for k in range(n - 1)]``. Terms that apply the
+    ``[x[k] ** 2 + x[k + 1] for k in range(n - 1)]``. Expressions that apply the
     same operations, and differ only in which entries of a Variable they index
-    or which constants they use, are rebuilt as one vector expression. Terms
-    using other operations (matmul, sum, ...) are kept as they are, unless
+    or which constants they use, are rebuilt as one vector expression. Other
+    expressions (using matmul, sum, ...) are kept as they are, unless
     they are a sum of mergeable operands.
 
     Parameters
     ----------
-    terms : list of Expression or float
-        The scalar terms to stack; each must have shape ``(1, 1)``.
+    exprs : list of Expression or float
+        The scalar expressions to stack; each must have shape ``(1, 1)``.
 
     Returns
     -------
     expr : Expression
-        An expression of shape ``(len(terms), 1)`` holding one term per row.
-        Merged terms are grouped together, so rows may be reordered.
+        An expression of shape ``(len(exprs), 1)`` holding one expression per
+        row. Merged expressions are grouped together, so rows may be reordered.
     perm : numpy.ndarray of int or None
-        Row ``j`` of ``expr`` is ``terms[perm[j]]``. ``None`` if every term
-        kept its position, i.e. ``expr`` is ``vstack(terms)``.
+        Row ``j`` of ``expr`` is ``exprs[perm[j]]``. ``None`` if every
+        expression kept its position, i.e. ``expr`` is ``vstack(exprs)``.
 
     Raises
     ------
     ValueError
-        If ``terms`` is empty or a term does not have shape ``(1, 1)``.
+        If ``exprs`` is empty or an expression does not have shape ``(1, 1)``.
 
     Examples
     --------
@@ -79,16 +79,17 @@ def compact(terms):
     >>> perm
     array([0, 2, 1])
     """
-    if not terms:
-        raise ValueError("compact: need at least one term")
-    values, groups = {}, {}  # values: id -> Variable/Parameter the terms use
-    for i, t in enumerate(terms):
+    if not exprs:
+        raise ValueError("compact: need at least one expression")
+    values, groups = {}, {}  # values: id -> Variable/Parameter the exprs use
+    for i, t in enumerate(exprs):
         t = cast_to_const(t)
         if t.shape != (1, 1):
-            raise ValueError(f"compact: term {i} has shape {t.shape}, not (1, 1)")
+            raise ValueError(f"compact: expression {i} has shape {t.shape}, "
+                             "not (1, 1)")
         try:
             instructions, args = _lower(t, values)
-        except (UnsupportedTermError, RecursionError):
+        except (UnsupportedExprError, RecursionError):
             instructions, args = ("single", i), None
         groups.setdefault(instructions, []).append((i, t, args))
 
@@ -103,23 +104,23 @@ def compact(terms):
     return expr, perm
 
 
-def _reduce(term):
+def _reduce(expr):
     """Rewrite a sum of many operands as ``sum(compact(operands))``.
 
-    The chain of ``add`` nodes in ``term`` is flattened into its operands,
+    The chain of ``add`` nodes in ``expr`` is flattened into its operands,
     which are compacted and summed. This reassociates the sum.
 
     Parameters
     ----------
-    term : Expression
-        A scalar term that merged with no other term.
+    expr : Expression
+        A scalar expression that merged with no other.
 
     Returns
     -------
     Expression
-        The rewritten sum if it has fewer nodes than ``term``, else ``term``.
+        The rewritten sum if it has fewer nodes than ``expr``, else ``expr``.
     """
-    operands, stack = [], [term]
+    operands, stack = [], [expr]
     while stack:
         e = stack.pop()
         if isinstance(e, Node) and e.opcode == "add":
@@ -127,9 +128,9 @@ def _reduce(term):
         else:
             operands.append(e)
     if len(operands) < 2:
-        return term
+        return expr
     reduced = atoms.sum(compact(operands)[0])
-    return reduced if _count_nodes(reduced) < _count_nodes(term) else term
+    return reduced if _count_nodes(reduced) < _count_nodes(expr) else expr
 
 
 def _count_nodes(e):
@@ -154,34 +155,34 @@ def _count_nodes(e):
     return len(seen)
 
 
-def _lower(term, values):
-    """Lower a scalar term to a list of instructions and its per-term args.
+def _lower(expr, values):
+    """Lower a scalar expression to a list of instructions and its args.
 
-    Two terms with equal ``instructions`` apply the same operations and differ
+    Two expressions with equal ``instructions`` apply the same operations and differ
     only in their ``args``, so they can be merged by :func:`_vectorize`.
 
     Parameters
     ----------
-    term : Expression
-        A scalar term of shape ``(1, 1)``.
+    expr : Expression
+        A scalar expression of shape ``(1, 1)``.
     values : dict
-        Maps ``id`` to each Variable or Parameter the terms use. Updated in
-        place with the ones ``term`` uses.
+        Maps ``id`` to each Variable or Parameter the exprs use. Updated in
+        place with the ones ``expr`` uses.
 
     Returns
     -------
     instructions : tuple of tuple
-        The term's nodes in post-order, each as ``(opcode, *operands)``.
+        The expression's nodes in post-order, each as ``(opcode, *operands)``.
         Operands are value numbers (positions in ``instructions``), so a
-        subexpression shared inside the term is computed once.
+        subexpression shared inside ``expr`` is computed once.
     args : list
-        The per-term data, in instruction order: the index of each ``load``
+        The per-expression data, in instruction order: the index of each ``load``
         and the value of each ``const``.
 
     Raises
     ------
-    UnsupportedTermError
-        If ``term`` uses an operation that cannot be vectorized.
+    UnsupportedExprError
+        If ``expr`` uses an operation that cannot be vectorized.
     """
     instructions, args, number = [], [], {}  # number: id(node) -> value number
 
@@ -189,7 +190,7 @@ def _lower(term, values):
         if id(e) in number:
             return number[id(e)]
         if e.shape != (1, 1):
-            raise UnsupportedTermError
+            raise UnsupportedExprError
         if isinstance(e, Constant):
             inst = ("const",)
             args.append(float(e.value[0, 0]))
@@ -197,7 +198,7 @@ def _lower(term, values):
             values[id(e)] = e
             inst = ("global", id(e))
         elif not isinstance(e, Node):
-            raise UnsupportedTermError
+            raise UnsupportedExprError
         elif e.opcode == "index" and isinstance(e.args[0], Variable):
             values[id(e.args[0])] = e.args[0]
             inst = ("load", id(e.args[0]))
@@ -209,38 +210,39 @@ def _lower(term, values):
         elif e.opcode == "power":
             inst = ("power", e.attrs["p"], visit(e.args[0]))
         else:
-            raise UnsupportedTermError
+            raise UnsupportedExprError
         number[id(e)] = len(instructions)
         instructions.append(inst)
         return number[id(e)]
 
-    visit(term)
+    visit(expr)
     return tuple(instructions), args
 
 
 def _vectorize(instructions, args, values):
-    """Build one vector expression for a group of terms with equal instructions.
+    """Build one vector expression from expressions with equal instructions.
 
-    The instructions are run once on column vectors with one row per term:
-    each ``load`` becomes a gather of the Variable at every term's index, and
-    each ``const`` a constant vector of every term's value.
+    The instructions are run once on column vectors with one row per
+    expression: each ``load`` becomes a gather of the Variable at every
+    expression's index, and each ``const`` a constant vector of every
+    expression's value.
 
     Parameters
     ----------
     instructions : tuple of tuple
-        The instructions shared by the terms, as returned by :func:`_lower`.
+        The instructions shared by the expressions, as returned by :func:`_lower`.
     args : list of list
-        ``args[i]`` is the args of term ``i``, as returned by :func:`_lower`.
+        ``args[i]`` is the args of expression ``i``, as returned by :func:`_lower`.
     values : dict
         Maps ``id`` to each Variable or Parameter the instructions use.
 
     Returns
     -------
     Expression
-        An expression of shape ``(len(args), 1)`` whose row ``i`` is term ``i``.
+        An expression of shape ``(len(args), 1)``; row ``i`` is expression ``i``.
     """
     n_rows = len(args)
-    arg_columns = iter(zip(*args))  # one load/const arg across all terms
+    arg_columns = iter(zip(*args))  # one load/const arg across all expressions
     vecs = []  # vecs[n]: the vector for value number n
     for inst in instructions:
         opcode = inst[0]
@@ -263,5 +265,5 @@ def _vectorize(instructions, args, values):
             vecs.append(vecs[inst[2]] ** inst[1])
         else:
             vecs.append(getattr(atoms, opcode)(vecs[inst[1]]))
-    # with no load/const (every term is e.g. the scalar y) the result is a scalar
+    # with no load/const (every expression is e.g. y) the result is a scalar
     return broadcast(vecs[-1], (n_rows, 1))
