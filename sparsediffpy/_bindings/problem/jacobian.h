@@ -28,7 +28,7 @@ static PyObject *py_problem_jacobian(PyObject *self, PyObject *args)
         PyObject *indices = PyArray_SimpleNew(1, &zero, NPY_INT32);
         PyObject *indptr = PyArray_SimpleNew(1, &one, NPY_INT32);
         ((int *) PyArray_DATA((PyArrayObject *) indptr))[0] = 0;
-        return Py_BuildValue("(OOO(ii))", data, indices, indptr, 0, prob->n_vars);
+        return Py_BuildValue("(NNN(ii))", data, indices, indptr, 0, prob->n_vars);
     }
 
     problem_jacobian(prob);
@@ -53,7 +53,7 @@ static PyObject *py_problem_jacobian(PyObject *self, PyObject *args)
     memcpy(PyArray_DATA((PyArrayObject *) indices), jac->i, nnz * sizeof(int));
     memcpy(PyArray_DATA((PyArrayObject *) indptr), jac->p, m_plus_1 * sizeof(int));
 
-    return Py_BuildValue("(OOO(ii))", data, indices, indptr, jac->m, jac->n);
+    return Py_BuildValue("(NNN(ii))", data, indices, indptr, jac->m, jac->n);
 }
 
 static PyObject *py_get_jacobian(PyObject *self, PyObject *args)
@@ -99,7 +99,7 @@ static PyObject *py_get_jacobian(PyObject *self, PyObject *args)
     memcpy(PyArray_DATA((PyArrayObject *) indices), jac->i, nnz * sizeof(int));
     memcpy(PyArray_DATA((PyArrayObject *) indptr), jac->p, m_plus_1 * sizeof(int));
 
-    return Py_BuildValue("(OOO(ii))", data, indices, indptr, jac->m, jac->n);
+    return Py_BuildValue("(NNN(ii))", data, indices, indptr, jac->m, jac->n);
 }
 
 static PyObject *py_get_jacobian_sparsity_coo(PyObject *self, PyObject *args)
@@ -142,7 +142,7 @@ static PyObject *py_get_jacobian_sparsity_coo(PyObject *self, PyObject *args)
     memcpy(PyArray_DATA((PyArrayObject *) rows), coo->rows, nnz * sizeof(int));
     memcpy(PyArray_DATA((PyArrayObject *) cols), coo->cols, nnz * sizeof(int));
 
-    return Py_BuildValue("(OO(ii))", rows, cols, coo->m, coo->n);
+    return Py_BuildValue("(NN(ii))", rows, cols, coo->m, coo->n);
 }
 
 static PyObject *py_problem_eval_jacobian_vals(PyObject *self, PyObject *args)
