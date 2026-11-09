@@ -278,7 +278,7 @@ def test_unset_parameter_raises(scope):
 # --- Caching ------------------------------------------------------------------
 
 def count_calls(monkeypatch, name):
-    """Count calls to the engine function `name` as seen from sparsediffpy.problem."""
+    """Count calls to engine function `name` as seen from sparsediffpy.problem."""
     calls, real = [], getattr(problem._C, name)
 
     def counted(*args):
