@@ -4,7 +4,7 @@ import numpy as np
 import scipy.sparse as sps
 
 from sparsediffpy import _sparsediffengine as _C
-from sparsediffpy._expression import (
+from sparsediffpy.expression import (
     Constant, Node, Parameter, Variable, _check_shape, _check_symmetric,
     cast_to_const,
 )
@@ -24,7 +24,7 @@ def _elementwise(make, name, restricted=False):
         x = cast_to_const(x)
         if restricted:
             _require_variables(name, x)
-        return Node(make, [x], x.shape)
+        return Node(make, [x], x.shape, name)
     atom.__name__ = atom.__qualname__ = name
     atom.__doc__ = f"Elementwise {name}."
     return atom
@@ -56,7 +56,7 @@ def atan2(y, x):
     _require_variables("atan2", y, x)
     if y.shape != x.shape:
         raise ValueError(f"atan2: shape mismatch {y.shape} vs {x.shape}")
-    return Node(_C.make_atan2, [y, x], y.shape)
+    return Node(_C.make_atan2, [y, x], y.shape, "atan2")
 
 
 def _reduction_shape(x, axis):
@@ -73,7 +73,7 @@ def sum(x, axis=None):
     x = cast_to_const(x)
     shape = _reduction_shape(x, axis)
     c_axis = -1 if axis is None else axis
-    return Node(lambda c: _C.make_sum(c, c_axis), [x], shape)
+    return Node(lambda c: _C.make_sum(c, c_axis), [x], shape, "sum")
 
 
 def prod(x, axis=None):
@@ -84,7 +84,7 @@ def prod(x, axis=None):
     shape = _reduction_shape(x, axis)
     make = {None: _C.make_prod, 0: _C.make_prod_axis_zero,
             1: _C.make_prod_axis_one}[axis]
-    return Node(make, [x], shape)
+    return Node(make, [x], shape, "prod")
 
 
 def reshape(x, d1, d2):
@@ -92,14 +92,14 @@ def reshape(x, d1, d2):
     x, shape = cast_to_const(x), _check_shape(d1, d2)
     if x.size != shape[0] * shape[1]:
         raise ValueError(f"Cannot reshape {x.shape} to {shape}")
-    return Node(lambda c: _C.make_reshape(c, *shape), [x], shape)
+    return Node(lambda c: _C.make_reshape(c, *shape), [x], shape, "reshape")
 
 
 def trace(x):
     x = cast_to_const(x)
     if x.shape[0] != x.shape[1]:
         raise ValueError(f"trace requires a square matrix, got {x.shape}")
-    return Node(_C.make_trace, [x], (1, 1))
+    return Node(_C.make_trace, [x], (1, 1), "trace")
 
 
 def diag_vec(x):
@@ -107,7 +107,7 @@ def diag_vec(x):
     x = cast_to_const(x)
     if x.shape[1] != 1:
         raise ValueError(f"diag_vec requires a column vector, got {x.shape}")
-    return Node(_C.make_diag_vec, [x], (x.shape[0], x.shape[0]))
+    return Node(_C.make_diag_vec, [x], (x.shape[0], x.shape[0]), "diag_vec")
 
 
 def hstack(exprs):
@@ -117,7 +117,7 @@ def hstack(exprs):
         raise ValueError(f"hstack: need >=1 args with equal rows, got "
                          f"{[e.shape for e in exprs]}")
     shape = (exprs[0].shape[0], np.sum([e.shape[1] for e in exprs]).item())
-    return Node(lambda *caps: _C.make_hstack(list(caps)), exprs, shape)
+    return Node(lambda *caps: _C.make_hstack(list(caps)), exprs, shape, "hstack")
 
 
 def vstack(exprs):
@@ -127,7 +127,7 @@ def vstack(exprs):
         raise ValueError(f"vstack: need >=1 args with equal columns, got "
                          f"{[e.shape for e in exprs]}")
     shape = (np.sum([e.shape[0] for e in exprs]).item(), exprs[0].shape[1])
-    return Node(lambda *caps: _C.make_vstack(list(caps)), exprs, shape)
+    return Node(lambda *caps: _C.make_vstack(list(caps)), exprs, shape, "vstack")
 
 
 def quad_form(x, Q):
@@ -147,18 +147,18 @@ def quad_form(x, Q):
         if Q._flat is not None:
             _check_symmetric(Q._flat, Q.shape)
         return Node(lambda p, c: _C.make_quad_form(p, c, "dense", None, n),
-                    [Q, x], (1, 1))
+                    [Q, x], (1, 1), "quad_form")
     if not isinstance(Q, Constant):
         raise TypeError("quad_form: Q must be a constant or a Parameter")
     V = (Q.value + Q.value.T) / 2  # the engine assumes symmetric Q
     if not sps.issparse(V):
         data = np.ascontiguousarray(V).ravel()
         return Node(lambda c: _C.make_quad_form(None, c, "dense", data, n),
-                    [x], (1, 1))
+                    [x], (1, 1), "quad_form")
     V = sps.csr_matrix(V)
     return Node(lambda c: _C.make_quad_form(
         None, c, "sparse", V.data, V.indices.astype(np.int32),
-        V.indptr.astype(np.int32), n, n), [x], (1, 1))
+        V.indptr.astype(np.int32), n, n), [x], (1, 1), "quad_form")
 
 
 def quad_over_lin(x, z):
@@ -166,7 +166,7 @@ def quad_over_lin(x, z):
     _require_variables("quad_over_lin", x, z)
     if z.shape != (1, 1):
         raise ValueError(f"quad_over_lin: z must be scalar, got {z.shape}")
-    return Node(_C.make_quad_over_lin, [x, z], (1, 1))
+    return Node(_C.make_quad_over_lin, [x, z], (1, 1), "quad_over_lin")
 
 
 def rel_entr(x, y):
@@ -181,4 +181,4 @@ def rel_entr(x, y):
         shape = y.shape
     else:
         raise ValueError(f"rel_entr: incompatible shapes {x.shape} and {y.shape}")
-    return Node(_C.make_rel_entr, [x, y], shape)
+    return Node(_C.make_rel_entr, [x, y], shape, "rel_entr")

@@ -1,7 +1,8 @@
 """Expression graph: Scope, leaves (Variable/Parameter/Constant), and operators.
 
-Every non-leaf is a generic ``Node(make, args, shape)``: ``make`` receives the
-C capsules of ``args`` and returns the node's own capsule. Shapes are always
+Every non-leaf is a generic ``Node(make, args, shape, opcode)``: ``make``
+receives the C capsules of ``args`` and returns the node's own capsule, and
+``opcode`` names the operation. Shapes are always
 2-D ``(d1, d2)`` and values are flattened column-major, like the C engine.
 """
 
@@ -38,7 +39,7 @@ class Expression:
 
     @property
     def T(self):
-        return Node(_C.make_transpose, [self], self.shape[::-1])
+        return Node(_C.make_transpose, [self], self.shape[::-1], "transpose")
 
     def __add__(self, other):
         return _add(self, cast_to_const(other))
@@ -53,7 +54,7 @@ class Expression:
         return _add(cast_to_const(other), -self)
 
     def __neg__(self):
-        return Node(_C.make_neg, [self], self.shape)
+        return Node(_C.make_neg, [self], self.shape, "neg")
 
     def __mul__(self, other):
         return _mul(self, cast_to_const(other))
@@ -70,7 +71,8 @@ class Expression:
     def __pow__(self, p):
         if not isinstance(p, numbers.Real):
             raise TypeError("Exponent must be a constant number")
-        return Node(lambda c: _C.make_power(c, float(p)), [self], self.shape)
+        return Node(lambda c: _C.make_power(c, float(p)), [self], self.shape,
+                    "power", {"p": float(p)})
 
     def __getitem__(self, key):
         return _index(self, key)
@@ -82,12 +84,19 @@ class Expression:
 
 
 class Node(Expression):
-    """An operation: ``make(*child_capsules)`` builds its C capsule."""
+    """An operation: ``make(*child_capsules)`` builds its C capsule.
 
-    def __init__(self, make, args, shape):
+    ``opcode`` names the operation and ``attrs`` holds the parameters that
+    rewrites such as :func:`compact` read (``idx`` for index, ``p`` for power).
+    Compilation only uses ``make``.
+    """
+
+    def __init__(self, make, args, shape, opcode, attrs=None):
         self.make = make
         self.args = tuple(args)
         self.shape = tuple(shape)
+        self.opcode = opcode
+        self.attrs = attrs
 
 
 class Constant(Expression):
@@ -254,23 +263,26 @@ def broadcast(x, shape):
         raise ValueError(f"Cannot broadcast {x.shape} to {shape}")
     if isinstance(x, Constant):
         return Constant(np.broadcast_to(x.dense(), shape))
-    return Node(lambda c: _C.make_broadcast(c, *shape), [x], shape)
+    return Node(lambda c: _C.make_broadcast(c, *shape), [x], shape,
+                "broadcast")
 
 
 def _add(a, b):
     shape = _broadcast_shape(a.shape, b.shape)
-    return Node(_C.make_add, [broadcast(a, shape), broadcast(b, shape)], shape)
+    return Node(_C.make_add, [broadcast(a, shape), broadcast(b, shape)], shape,
+                "add")
 
 
 def _mul(a, b):
     if _is_data(b) and not _is_data(a):
         a, b = b, a  # put the constant/parameter operand (if any) first
     if _is_data(a) and a.shape == (1, 1):
-        return Node(_C.make_param_scalar_mult, [a, b], b.shape)
+        return Node(_C.make_param_scalar_mult, [a, b], b.shape, "scalar_mult")
     shape = _broadcast_shape(a.shape, b.shape)
     a, b = broadcast(a, shape), broadcast(b, shape)
-    make = _C.make_param_vector_mult if _is_data(a) else _C.make_multiply
-    return Node(make, [a, b], shape)
+    if _is_data(a):
+        return Node(_C.make_param_vector_mult, [a, b], shape, "vector_mult")
+    return Node(_C.make_multiply, [a, b], shape, "multiply")
 
 
 def _matmul(a, b):
@@ -279,11 +291,11 @@ def _matmul(a, b):
     shape = (a.shape[0], b.shape[1])
     if _is_data(a):
         return Node(_matmul_with_data(_C.make_left_matmul, a), _data_args(a, b),
-                    shape)
+                    shape, "left_matmul")
     if _is_data(b):
         return Node(_matmul_with_data(_C.make_right_matmul, b), _data_args(b, a),
-                    shape)
-    return Node(_C.make_matmul, [a, b], shape)
+                    shape, "right_matmul")
+    return Node(_C.make_matmul, [a, b], shape, "matmul")
 
 
 def _data_args(data, x):
@@ -312,7 +324,8 @@ def index_flat(x, flat_indices, shape):
         raise ValueError(f"{idx.size} indices do not fill shape {shape}")
     if idx.size and (idx.min() < 0 or idx.max() >= x.size):
         raise IndexError(f"flat index out of range for size {x.size}")
-    return Node(lambda c: _C.make_index(c, shape[0], shape[1], idx), [x], shape)
+    return Node(lambda c: _C.make_index(c, shape[0], shape[1], idx), [x], shape,
+                "index", {"idx": idx})
 
 
 def _axis_indices(key, n):

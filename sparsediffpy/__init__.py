@@ -15,12 +15,13 @@ limitations under the License.
 """
 
 from sparsediffpy import _sparsediffengine  # noqa: F401
-from sparsediffpy._expression import (  # noqa: F401
+from sparsediffpy.expression import (  # noqa: F401
     DimensionError, Expression, Parameter, Scope, Variable, broadcast, index_flat,
 )
-from sparsediffpy._atoms import (  # noqa: F401
+from sparsediffpy.atoms import (  # noqa: F401
     asinh, atan, atan2, atanh, cos, diag_vec, entr, exp, hstack, log, logistic,
     normal_cdf, power, prod, quad_form, quad_over_lin, rel_entr, reshape, sin,
     sinh, sum, tan, tanh, trace, vstack, xexp,
 )
-from sparsediffpy._compile import CompiledExpression, Problem, compile  # noqa: F401
+from sparsediffpy.problem import CompiledExpression, Problem, compile  # noqa: F401
+from sparsediffpy.vectorize import compact  # noqa: F401
