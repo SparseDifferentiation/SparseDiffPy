@@ -35,8 +35,8 @@ _UNARY = {"sin", "cos", "exp", "sinh", "tanh", "asinh", "atan", "logistic",
           "normal_cdf", "xexp"}
 
 
-class _Unsupported(Exception):
-    pass
+class UnsupportedTermError(Exception):
+    """Raised when a term uses an operation that cannot be vectorized."""
 
 
 def compact(terms):
@@ -88,7 +88,7 @@ def compact(terms):
             raise ValueError(f"compact: term {i} has shape {t.shape}, not (1, 1)")
         try:
             instructions, args = _lower(t, values)
-        except (_Unsupported, RecursionError):
+        except (UnsupportedTermError, RecursionError):
             instructions, args = ("single", i), None
         groups.setdefault(instructions, []).append((i, t, args))
 
@@ -180,7 +180,7 @@ def _lower(term, values):
 
     Raises
     ------
-    _Unsupported
+    UnsupportedTermError
         If ``term`` uses an operation that cannot be vectorized.
     """
     instructions, args, number = [], [], {}  # number: id(node) -> value number
@@ -189,7 +189,7 @@ def _lower(term, values):
         if id(e) in number:
             return number[id(e)]
         if e.shape != (1, 1):
-            raise _Unsupported
+            raise UnsupportedTermError
         if isinstance(e, Constant):
             inst = ("const",)
             args.append(float(e.value[0, 0]))
@@ -197,7 +197,7 @@ def _lower(term, values):
             values[id(e)] = e
             inst = ("global", id(e))
         elif not isinstance(e, Node):
-            raise _Unsupported
+            raise UnsupportedTermError
         elif e.opcode == "index" and isinstance(e.args[0], Variable):
             values[id(e.args[0])] = e.args[0]
             inst = ("load", id(e.args[0]))
@@ -209,7 +209,7 @@ def _lower(term, values):
         elif e.opcode == "power":
             inst = ("power", e.attrs["p"], visit(e.args[0]))
         else:
-            raise _Unsupported
+            raise UnsupportedTermError
         number[id(e)] = len(instructions)
         instructions.append(inst)
         return number[id(e)]
