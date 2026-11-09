@@ -1,4 +1,4 @@
-"""compact() on benchmark NLPs must match the hand-vectorized formulation."""
+"""Benchmark NLPs written as scalar loops must match their vectorized form."""
 
 import numpy as np
 import pytest
@@ -119,18 +119,17 @@ def vdp(N):
 
 
 def _build(problem):
+    """The hand-vectorized problem and the one written as scalar loops."""
     n, vec, scalar = problem
     f, g = vec(sp.Scope().Variable(n, 1))
     ref = sp.Problem(0.0 if f is None else f, [g])
     f_terms, g_terms = scalar(sp.Scope().Variable(n, 1))
-    f = None if f_terms is None else sp.compact(f_terms)[0]
-    g, perm = sp.compact(g_terms)
-    p = sp.Problem(0.0 if f is None else sp.sum(f), [g])
-    return n, ref, p, f, g, perm
+    p = sp.Problem(0.0 if f_terms is None else sum(f_terms), g_terms)
+    return n, ref, p
 
 
-def _assert_same(n, ref, p, perm):
-    rows = slice(None) if perm is None else perm
+def _assert_same(n, ref, p, rows=slice(None)):
+    """p matches ref, whose constraint rows are ``rows`` of p's."""
     for seed in range(3):
         rng = np.random.default_rng(seed)
         u = 0.5 + 0.3 * rng.standard_normal(n)
@@ -145,34 +144,35 @@ def _assert_same(n, ref, p, perm):
             np.testing.assert_allclose(a, b, **TOL)
 
 
+def _constraint_sizes(p):
+    return [count_nodes(c) for c in p.constraints]
+
+
 @pytest.mark.parametrize("make, size", [
     (luksan, 3), (luksan, 12), (luksan, 50), (brusselator, 4), (logreg, 6),
     (vdp, 1), (vdp, 6), (vdp, 20),
 ], ids=lambda v: getattr(v, "__name__", str(v)))
-def test_compact_matches_vectorized(make, size):
-    n, ref, p, f, g, perm = _build(make(size))
-    assert perm is None
-    _assert_same(n, ref, p, perm)
+def test_scalar_problem_matches_vectorized(make, size):
+    _assert_same(*_build(make(size)))
 
 
 @pytest.mark.parametrize("make, size", [
     (luksan, 10), (brusselator, 3), (logreg, 6), (vdp, 3),
 ], ids=lambda v: getattr(v, "__name__", str(v)))
 def test_graph_size_does_not_grow(make, size):
-    *_, f1, g1, _ = _build(make(size))
-    *_, f2, g2, _ = _build(make(2 * size))
-    assert count_nodes(g1) == count_nodes(g2)
-    if f1 is not None and make is not logreg:
-        assert count_nodes(f1) == count_nodes(f2)
+    p1, p2 = _build(make(size))[2], _build(make(2 * size))[2]
+    assert _constraint_sizes(p1) == _constraint_sizes(p2)
 
 
-def test_interleaved_rows_are_grouped():
-    n, ref, p, f, g, perm = _build(brusselator(3, interleaved=True))
-    assert list(perm) == list(range(0, 18, 2)) + list(range(1, 18, 2))
-    _assert_same(n, ref, p, None)
+def test_interleaved_rows_keep_their_order():
+    n, ref, p = _build(brusselator(3, interleaved=True))
+    assert len(p.constraints) == 1
+    M = 9  # fu_k, fv_k alternate; ref stacks all fu, then all fv
+    _assert_same(n, ref, p, np.arange(2 * M).reshape(2, M).T.ravel())
 
 
-def test_compact_shrinks_the_graph():
+def test_problem_shrinks_the_graph():
     n, _, scalar = luksan(200)
-    terms = scalar(sp.Scope().Variable(n, 1))[1]
-    assert 50 * count_nodes(sp.compact(terms)[0]) < count_nodes(sp.vstack(terms))
+    g_terms = scalar(sp.Scope().Variable(n, 1))[1]
+    p = sp.Problem(0.0, g_terms)
+    assert 50 * sum(_constraint_sizes(p)) < count_nodes(sp.vstack(g_terms))

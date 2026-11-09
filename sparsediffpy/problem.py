@@ -10,7 +10,34 @@ import numpy as np
 import scipy.sparse as sps
 
 from sparsediffpy import _sparsediffengine as _C
-from sparsediffpy.expression import Constant, Parameter, Variable, _flatten_shaped, _flatten_vector, cast_to_const
+from sparsediffpy.expression import (
+    Constant, Parameter, Variable, _flatten_shaped, _flatten_vector, cast_to_const,
+    index_flat,
+)
+from sparsediffpy.vectorize import compact
+
+
+def _compact_in_order(exprs):
+    """``compact(exprs)`` with its rows gathered back into their given order."""
+    expr, perm = compact(exprs)
+    if perm is None:
+        return expr
+    return index_flat(expr, np.argsort(perm), expr.shape)
+
+
+def _compact_constraints(constraints):
+    """Compact each run of consecutive scalar constraints, keeping row order."""
+    out, run = [], []
+    for c in constraints + [None]:
+        if c is not None and c.shape == (1, 1):
+            run.append(c)
+            continue
+        if run:
+            out.append(_compact_in_order(run))
+            run = []
+        if c is not None:
+            out.append(c)
+    return out
 
 
 def _find_scope(exprs):
@@ -99,6 +126,12 @@ class Problem:
     gradient/jacobian are skipped when the matching forward has not moved.
     Skipped calls return the cached object, which the problem owns: do not
     modify it in place.
+
+    Each run of consecutive scalar constraints, such as one per iteration of
+    a Python loop, is merged into vector expressions with
+    :func:`~sparsediffpy.compact`. Constraint rows keep the order they were
+    given in. ``objective`` and ``constraints`` hold the expressions as built
+    in the engine.
     """
 
     def __init__(self, objective, constraints=(), verbose=False):
@@ -106,6 +139,8 @@ class Problem:
         constraints = [cast_to_const(c) for c in constraints]
         if objective.shape != (1, 1):
             raise ValueError(f"Objective must be scalar, got {objective.shape}")
+        constraints = _compact_constraints(constraints)
+        self.objective, self.constraints = objective, constraints
         self._scope = _find_scope([objective, *constraints])
         build = _Builder(self._scope)
         obj_cap = build(objective)
