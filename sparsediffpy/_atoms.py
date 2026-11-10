@@ -20,6 +20,10 @@ def _require_variables(name, *xs):
 
 
 def _elementwise(make, name, restricted=False):
+    """Make the elementwise atom ``name`` from its engine constructor.
+
+    A restricted atom (domain not all of R) only accepts a plain Variable.
+    """
     def atom(x):
         x = cast_to_const(x)
         if restricted:
@@ -69,7 +73,7 @@ def _reduction_shape(x, axis):
 
 
 def sum(x, axis=None):
-    """Sum of all entries (axis=None) -> (1, 1); axis=0 -> (1, d2); axis=1 -> (1, d1)."""
+    """Sum of entries: axis=None -> (1, 1), axis=0 -> (1, d2), axis=1 -> (1, d1)."""
     x = cast_to_const(x)
     shape = _reduction_shape(x, axis)
     c_axis = -1 if axis is None else axis
@@ -96,6 +100,7 @@ def reshape(x, d1, d2):
 
 
 def trace(x):
+    """Sum of the diagonal of a square matrix, as a (1, 1) expression."""
     x = cast_to_const(x)
     if x.shape[0] != x.shape[1]:
         raise ValueError(f"trace requires a square matrix, got {x.shape}")

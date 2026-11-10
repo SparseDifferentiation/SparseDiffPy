@@ -18,6 +18,7 @@ class DimensionError(ValueError):
 
 
 def _check_shape(d1, d2):
+    """Return (d1, d2) as a tuple of positive Python ints, or raise."""
     if not all(isinstance(d, (int, np.integer)) for d in (d1, d2)):
         raise TypeError(f"Shape dimensions must be integers, got ({d1!r}, {d2!r})")
     if d1 <= 0 or d2 <= 0:
@@ -34,10 +35,12 @@ class Expression:
 
     @property
     def size(self):
+        """Number of entries, d1 * d2."""
         return self.shape[0] * self.shape[1]
 
     @property
     def T(self):
+        """Transpose."""
         return Node(_C.make_transpose, [self], self.shape[::-1])
 
     def __add__(self, other):
@@ -110,6 +113,7 @@ class Constant(Expression):
         self.shape = _check_shape(*self.value.shape)
 
     def dense(self):
+        """The value as a dense array."""
         return self.value.toarray() if sps.issparse(self.value) else self.value
 
 
@@ -121,6 +125,7 @@ class Variable(Expression):
 
     @property
     def value(self):
+        """The variable's current entries, shaped like the variable."""
         flat = self._scope._values[self._offset:self._offset + self.size]
         return flat.reshape(self.shape, order="F").copy()
 
@@ -143,6 +148,7 @@ class Parameter(Expression):
 
     @property
     def value(self):
+        """The parameter's current value, or None if it was never set."""
         if self._flat is None:
             return None
         return self._flat.reshape(self.shape, order="F").copy()
@@ -157,6 +163,7 @@ class Parameter(Expression):
 
 
 def _check_symmetric(flat, shape):
+    """Raise unless the column-major ``flat`` is a symmetric matrix of ``shape``."""
     M = flat.reshape(shape, order="F")
     if not np.allclose(M, M.T):
         raise ValueError("Parameter used in quad_form must be symmetric")
@@ -173,7 +180,8 @@ def _flatten_shaped(val, shape):
     arr = np.asarray(val, dtype=np.float64)
     if not (arr.shape == shape
             or (arr.ndim == 0 and shape == (1, 1))
-            or (arr.ndim == 1 and min(shape) == 1 and arr.size == shape[0] * shape[1])):
+            or (arr.ndim == 1 and min(shape) == 1
+                and arr.size == shape[0] * shape[1])):
         raise DimensionError(f"expected shape {shape}, got {arr.shape}")
     return arr.ravel(order="F")
 
@@ -192,12 +200,12 @@ class Scope:
 
     def __init__(self):
         self._values = np.zeros(0)
-        self._values_version = 0  # bumped on every write, so problems can skip stale work
+        self._values_version = 0  # bumped on every write; problems skip stale work
         self._n_params = 0
         self._param_version = 0
 
     def Variable(self, d1, d2):
-        """Create a (d1, d2) variable; its entries are appended to the flat vector."""
+        """Create a (d1, d2) variable, appending its entries to the flat vector."""
         shape = _check_shape(d1, d2)
         var = Variable(self, self._values.size, shape)
         self._values = np.concatenate([self._values, np.zeros(var.size)])
@@ -212,6 +220,7 @@ class Scope:
 
     @property
     def total_var_size(self):
+        """Length of the flat variable vector."""
         return self._values.size
 
     def set_values(self, array):
@@ -220,6 +229,7 @@ class Scope:
         self._values_version += 1
 
     def get_values(self):
+        """A copy of the flat variable vector (declaration order)."""
         return self._values.copy()
 
 
@@ -229,14 +239,12 @@ def cast_to_const(value):
 
 
 def _is_data(e):
+    """Whether e is data (Constant or Parameter) rather than a function of x."""
     return isinstance(e, (Constant, Parameter))
 
 
-# ---------------------------------------------------------------------------
-# Operator dispatch
-# ---------------------------------------------------------------------------
-
 def _broadcast_shape(a, b):
+    """Shape of a op b when scalars, rows and columns broadcast, or raise."""
     out = []
     for da, db in zip(a, b):
         if da != db and 1 not in (da, db):
@@ -258,11 +266,17 @@ def broadcast(x, shape):
 
 
 def _add(a, b):
+    """a + b, broadcasting both operands to the common shape first."""
     shape = _broadcast_shape(a.shape, b.shape)
     return Node(_C.make_add, [broadcast(a, shape), broadcast(b, shape)], shape)
 
 
 def _mul(a, b):
+    """Elementwise a * b.
+
+    A data operand (constant or parameter) uses the engine's scalar or vector
+    scaling atoms; two functions of x use the general product.
+    """
     if _is_data(b) and not _is_data(a):
         a, b = b, a  # put the constant/parameter operand (if any) first
     if _is_data(a) and a.shape == (1, 1):
@@ -274,6 +288,7 @@ def _mul(a, b):
 
 
 def _matmul(a, b):
+    """a @ b: data times a function of x (either side), or two functions of x."""
     if a.shape[1] != b.shape[0]:
         raise ValueError(f"Matmul shape mismatch: {a.shape} @ {b.shape}")
     shape = (a.shape[0], b.shape[1])
@@ -287,6 +302,7 @@ def _matmul(a, b):
 
 
 def _data_args(data, x):
+    """Children of a data matmul: a Parameter is a child, a Constant is baked in."""
     return [data, x] if isinstance(data, Parameter) else [x]
 
 
@@ -316,6 +332,7 @@ def index_flat(x, flat_indices, shape):
 
 
 def _axis_indices(key, n):
+    """Positions along an axis of length n chosen by an int, slice or int list."""
     if isinstance(key, (bool, np.bool_)):  # bool subclasses int; x[True] is not x[1]
         raise IndexError("Boolean indices are not supported; use integer indices")
     if isinstance(key, (int, np.integer)):
@@ -340,7 +357,8 @@ def _index(x, key):
     d1, d2 = x.shape
     if isinstance(key, tuple):
         if len(key) != 2:
-            raise IndexError(f"Expected 2 indices for shape {x.shape}, got {len(key)}")
+            raise IndexError(
+                f"Expected 2 indices for shape {x.shape}, got {len(key)}")
         rows, cols = _axis_indices(key[0], d1), _axis_indices(key[1], d2)
         flat = (rows[:, None] + cols[None, :] * d1).ravel(order="F")
         return index_flat(x, flat, (rows.size, cols.size))

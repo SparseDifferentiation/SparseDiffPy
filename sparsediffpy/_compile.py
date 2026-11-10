@@ -10,7 +10,9 @@ import numpy as np
 import scipy.sparse as sps
 
 from sparsediffpy import _sparsediffengine as _C
-from sparsediffpy._expression import Constant, Parameter, Variable, _flatten_shaped, _flatten_vector, cast_to_const
+from sparsediffpy._expression import (
+    Constant, Parameter, Variable, _flatten_shaped, _flatten_vector, cast_to_const,
+)
 
 
 def _find_scope(exprs):
@@ -47,6 +49,7 @@ class _Builder:
         self.params = []  # (Parameter, capsule), each once
 
     def __call__(self, root):
+        """Return root's capsule, building any children not built yet."""
         stack = [root]
         while stack:
             e = stack[-1]
@@ -82,6 +85,7 @@ class _Builder:
 
 
 def _csr(triple):
+    """scipy CSR matrix from an engine (data, indices, indptr, shape) tuple."""
     data, indices, indptr, shape = triple
     return sps.csr_matrix((data, indices, indptr), shape=shape)
 
@@ -192,7 +196,7 @@ class Problem:
         return self._jac_value
 
     def hessian(self, obj_factor, lagrange):
-        """Lagrangian Hessian obj_factor * H_f + sum_i lagrange_i * H_gi (csr_matrix).
+        """Lagrangian Hessian obj_factor H_f + sum_i lagrange_i H_gi (csr_matrix).
 
         Call objective_forward and constraint_forward at the same point first.
         """

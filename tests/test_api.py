@@ -9,8 +9,6 @@ import sparsediffpy as sp
 from sparsediffpy import _compile
 
 
-# --- scope and values ---------------------------------------------------------
-
 def test_values_are_column_major(scope):
     X, y = scope.Variable(2, 2), scope.Variable(1, 1)
     X.value = np.array([[1.0, 2.0], [3.0, 4.0]])
@@ -128,8 +126,6 @@ def test_affine_hessian_is_zero(scope):
     x.value = [1.0, 2.0, 3.0]
     assert not fn.hessian([1.0]).toarray().any()
 
-
-# --- shapes and validation ----------------------------------------------------
 
 def test_shapes(scope):
     x, r, X = scope.Variable(3, 1), scope.Variable(1, 2), scope.Variable(3, 2)
@@ -251,8 +247,6 @@ def test_quad_form_parameter_must_be_symmetric(scope):
     np.testing.assert_allclose(fn.jacobian().toarray(), [2 * (2 * S) @ [1.0, 1.0]])
 
 
-# --- parameters ----------------------------------------------------------------
-
 def test_parameter_update_without_recompile(scope):
     x = scope.Variable(3, 1)
     A = scope.Parameter(2, 3, value=np.ones((2, 3)))
@@ -274,8 +268,6 @@ def test_unset_parameter_raises(scope):
     p.value = [1.0, 2.0]
     np.testing.assert_allclose(fn.forward(), [[0], [0]])
 
-
-# --- Caching ------------------------------------------------------------------
 
 def count_calls(monkeypatch, name):
     """Count calls to the engine function `name` as seen from _compile."""
@@ -354,8 +346,6 @@ def test_derivatives_require_forward(scope):
     prob.constraint_forward([1.0, 2.0])
     assert prob.hessian(1.0, [1.0, 1.0]).shape == (2, 2)
 
-
-# --- Problem ----------------------------------------------------------------------
 
 def test_problem(scope):
     x = scope.Variable(3, 1)
@@ -436,8 +426,6 @@ def test_hessian_without_prior_jacobian(scope):
         np.testing.assert_allclose(prob.hessian(2.0, w).toarray(), H_prob,
                                    atol=1e-12)
 
-
-# --- deep expressions -------------------------------------------------------------
 
 def test_compile_deep_sum(scope):
     """A loop-built sum is a chain of adds deeper than the recursion limit."""
