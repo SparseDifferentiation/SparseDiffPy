@@ -74,8 +74,10 @@ jobs:
           CIBW_ENVIRONMENT_WINDOWS: "CMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake SKBUILD_CMAKE_ARGS=-DSDE_WARNINGS_AS_ERRORS=ON"
           # Bundle openblas.dll into the wheel (auditwheel/delocate handle this on Linux/macOS)
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: "delvewheel repair -w {dest_dir} {wheel} --add-path C:/vcpkg/installed/x64-windows/bin"
-          # On free-threaded builds, assert the import did not re-enable the GIL.
-          CIBW_TEST_COMMAND: python -c "import sys, sysconfig, sparsediffpy; ft = bool(sysconfig.get_config_var('Py_GIL_DISABLED')); assert not ft or not sys._is_gil_enabled(), 'GIL re-enabled on import'; print('freethreaded_build=', ft)"
+          # On free-threaded builds, assert the import did not re-enable the GIL,
+          # then run the test suite against the installed wheel.
+          CIBW_TEST_REQUIRES: pytest
+          CIBW_TEST_COMMAND: python -c "import sys, sysconfig, sparsediffpy; ft = bool(sysconfig.get_config_var('Py_GIL_DISABLED')); assert not ft or not sys._is_gil_enabled(), 'GIL re-enabled on import'; print('freethreaded_build=', ft)" && pytest {project}/tests -q
       - name: Check wheels
         shell: bash
         run: |

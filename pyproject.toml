@@ -7,7 +7,7 @@ name = "sparsediffpy"
 version = "0.9.0"
 description = "Python bindings for SparseDiffEngine algorithmic differentiation"
 requires-python = ">=3.11"
-dependencies = ["numpy >= 2.0.0"]
+dependencies = ["numpy >= 2.0.0", "scipy"]
 license = "Apache-2.0"
 
 [project.readme]
