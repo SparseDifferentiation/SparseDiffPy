@@ -71,7 +71,7 @@ static PyObject *py_problem_hessian(PyObject *self, PyObject *args)
     memcpy(PyArray_DATA((PyArrayObject *) indices), H->i, nnz * sizeof(int));
     memcpy(PyArray_DATA((PyArrayObject *) indptr), H->p, n_plus_1 * sizeof(int));
 
-    return Py_BuildValue("(OOO(ii))", data, indices, indptr, H->m, H->n);
+    return Py_BuildValue("(NNN(ii))", data, indices, indptr, H->m, H->n);
 }
 
 static PyObject *py_get_hessian(PyObject *self, PyObject *args)
@@ -117,7 +117,7 @@ static PyObject *py_get_hessian(PyObject *self, PyObject *args)
     memcpy(PyArray_DATA((PyArrayObject *) indices), H->i, nnz * sizeof(int));
     memcpy(PyArray_DATA((PyArrayObject *) indptr), H->p, n_plus_1 * sizeof(int));
 
-    return Py_BuildValue("(OOO(ii))", data, indices, indptr, H->m, H->n);
+    return Py_BuildValue("(NNN(ii))", data, indices, indptr, H->m, H->n);
 }
 
 static PyObject *py_get_problem_hessian_sparsity_coo(PyObject *self, PyObject *args)
@@ -160,7 +160,7 @@ static PyObject *py_get_problem_hessian_sparsity_coo(PyObject *self, PyObject *a
     memcpy(PyArray_DATA((PyArrayObject *) rows), coo->rows, nnz * sizeof(int));
     memcpy(PyArray_DATA((PyArrayObject *) cols), coo->cols, nnz * sizeof(int));
 
-    return Py_BuildValue("(OO(ii))", rows, cols, coo->m, coo->n);
+    return Py_BuildValue("(NN(ii))", rows, cols, coo->m, coo->n);
 }
 
 static PyObject *py_problem_eval_hessian_vals_coo(PyObject *self, PyObject *args)
