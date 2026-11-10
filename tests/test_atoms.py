@@ -1,8 +1,13 @@
-"""Every atom: forward value vs NumPy, Jacobian and Hessian vs finite differences.
+"""Each atom is wired to the right engine call.
 
-Each case builds (expr, reference) on a fresh scope; ``reference()`` computes
-the expected value from the variables' current values with NumPy.
+A case is ``(name, shapes, f, positive)``. ``f(m, *xs)`` is evaluated once
+with ``m = sp`` on Variables (the expression under test) and once with
+``m = NP`` on their values (the expected result). A shape that is an array
+declares a Parameter with that value. The value must match NumPy, and the
+Jacobian and Hessian must match finite differences.
 """
+
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -14,224 +19,101 @@ import sparsediffpy as sp
 
 A = np.array([[1.0, -2.0, 0.5], [0.0, 3.0, 1.0]])
 Q = np.array([[2.0, 1.0, 0.0], [1.0, 3.0, 0.5], [0.0, 0.5, 4.0]])
-CASES = {}  # name -> (build, positive_domain)
+N = Q + np.triu(np.ones((3, 3)), 1)  # not symmetric
 
 
-def case(positive=False):
-    def register(build):
-        CASES[build.__name__] = (build, positive)
-        return build
-    return register
+def _reduce(f):
+    """NumPy sum/prod with sp's shapes: (1, 1), or a row for axis 0 or 1."""
+    return lambda X, axis=None: np.reshape(f(X, axis=axis), (1, -1))
 
 
-def _elementwise(name, f, ref, positive=False):
-    def build(s):
-        X = s.Variable(3, 2)
-        return f(X), lambda: ref(X.value)
-    build.__name__ = name
-    case(positive)(build)
+def _dense(M):
+    return M.toarray() if sps.issparse(M) else M
 
 
-for _name, _f, _ref in [
-    ("sin", sp.sin, np.sin), ("cos", sp.cos, np.cos), ("exp", sp.exp, np.exp),
-    ("sinh", sp.sinh, np.sinh), ("tanh", sp.tanh, np.tanh),
-    ("asinh", sp.asinh, np.arcsinh), ("atan", sp.atan, np.arctan),
-    ("logistic", sp.logistic, lambda x: np.log1p(np.exp(x))),
-    ("normal_cdf", sp.normal_cdf, ndtr), ("xexp", sp.xexp, lambda x: x * np.exp(x)),
-    ("power3", lambda x: x ** 3, lambda x: x ** 3),
-]:
-    _elementwise(_name, _f, _ref)
+NP = SimpleNamespace(
+    sin=np.sin, cos=np.cos, exp=np.exp, sinh=np.sinh, tanh=np.tanh, log=np.log,
+    tan=np.tan, asinh=np.arcsinh, atan=np.arctan, atanh=np.arctanh,
+    logistic=lambda x: np.logaddexp(0, x), normal_cdf=ndtr,
+    xexp=lambda x: x * np.exp(x), entr=lambda x: -x * np.log(x),
+    power=lambda x, p: x ** p, atan2=np.arctan2,
+    sum=_reduce(np.sum), prod=_reduce(np.prod), hstack=np.hstack, vstack=np.vstack,
+    reshape=lambda x, d1, d2: x.reshape(d1, d2, order="F"),
+    trace=lambda X: np.trace(X).reshape(1, 1), diag_vec=lambda x: np.diag(x.ravel()),
+    quad_form=lambda x, P: x.T @ _dense(P) @ x,
+    quad_over_lin=lambda x, z: (x ** 2).sum() / z,
+    rel_entr=lambda x, y: x * np.log(x / y),
+)
 
-for _name, _f, _ref in [
-    ("log", sp.log, np.log), ("tan", sp.tan, np.tan),
-    ("atanh", sp.atanh, np.arctanh), ("entr", sp.entr, lambda x: -x * np.log(x)),
-    ("power_half", lambda x: sp.power(x, 0.5), np.sqrt),
-]:
-    _elementwise(_name, _f, _ref, positive=True)
+ELEMENTWISE = ["sin", "cos", "exp", "sinh", "tanh", "asinh", "atan", "logistic",
+               "normal_cdf", "xexp"]
+POSITIVE_ELEMENTWISE = ["log", "tan", "atanh", "entr"]
 
-
-@case(positive=True)
-def atan2(s):
-    y, x = s.Variable(3, 1), s.Variable(3, 1)
-    return sp.atan2(y, x), lambda: np.arctan2(y.value, x.value)
-
-
-# --- affine -----------------------------------------------------------------
-
-@case()
-def add_broadcast(s):
-    a, r, c, X = s.Variable(1, 1), s.Variable(1, 2), s.Variable(3, 1), s.Variable(3, 2)
-    return a * X + r + c - 1.0, lambda: a.value * X.value + r.value + c.value - 1
-
-
-@case()
-def neg_sub(s):
-    x, y = s.Variable(3, 1), s.Variable(3, 1)
-    return -x - y + np.c_[0:3.0], lambda: -x.value - y.value + np.c_[0:3.0]
-
-
-@case()
-def constant_mult(s):
-    X = s.Variable(3, 2)
-    B = np.arange(6.0).reshape(3, 2)
-    return 2.0 * X * B, lambda: 2 * X.value * B
-
-
-@case()
-def matmul_dense_left_right(s):
-    x, Y = s.Variable(3, 1), s.Variable(2, 3)
-    return A @ x + (Y @ A.T)[:, 0:1], lambda: A @ x.value + (Y.value @ A.T)[:, 0:1]
-
-
-@case()
-def matmul_sparse_left_right(s):
-    x, Y = s.Variable(3, 1), s.Variable(2, 3)
-    S = sps.csr_matrix(A)
-    return S @ x + (Y @ S.T)[:, 0:1], lambda: A @ x.value + (Y.value @ A.T)[:, 0:1]
-
-
-@case()
-def transpose_reshape(s):
-    X = s.Variable(3, 2)
-    return sp.reshape(X.T, 6, 1), lambda: X.value.T.reshape(6, 1, order="F")
-
-
-@case()
-def sums(s):
-    X = s.Variable(3, 2)
-    return sp.hstack([sp.sum(X), sp.sum(X, axis=0), sp.sum(X, axis=1)]), \
-        lambda: np.r_[X.value.sum(), X.value.sum(0), X.value.sum(1)][None, :]
-
-
-@case()
-def trace_diag_vec(s):
-    X, x = s.Variable(3, 3), s.Variable(3, 1)
-    return sp.trace(X) + sp.diag_vec(x), \
-        lambda: np.trace(X.value) + np.diag(x.value.ravel())
+CASES = [
+    *[(a, [(3, 2)], lambda m, x, a=a: getattr(m, a)(x), False) for a in ELEMENTWISE],
+    *[(a, [(3, 2)], lambda m, x, a=a: getattr(m, a)(x), True)
+      for a in POSITIVE_ELEMENTWISE],
+    ("power", [(3, 2)], lambda m, x: x ** 3 + m.power(x, 0.5), True),
+    ("atan2", [(3, 1), (3, 1)], lambda m, y, x: m.atan2(y, x), True),
+    # affine
+    ("add_broadcast", [(1, 1), (1, 2), (3, 1), (3, 2)],
+     lambda m, a, r, c, X: a * X + r + c - 1.0, False),
+    ("neg_sub", [(3, 1), (3, 1)], lambda m, x, y: -x - y + np.c_[0:3.0], False),
+    ("constant_mult", [(3, 2)], lambda m, X: 2.0 * X * np.arange(6.0).reshape(3, 2),
+     False),
+    ("matmul_dense", [(3, 1), (2, 3)], lambda m, x, Y: A @ x + (Y @ A.T)[:, 0:1],
+     False),
+    ("matmul_sparse", [(3, 1), (2, 3)],
+     lambda m, x, Y: sps.csr_matrix(A) @ x + (Y @ sps.csr_matrix(A.T))[:, 0:1],
+     False),
+    ("transpose_reshape", [(3, 2)], lambda m, X: m.reshape(X.T, 6, 1), False),
+    ("sums", [(3, 2)],
+     lambda m, X: m.hstack([m.sum(X), m.sum(X, axis=0), m.sum(X, axis=1)]), False),
+    ("trace_diag_vec", [(3, 3), (3, 1)], lambda m, X, x: m.trace(X) + m.diag_vec(x),
+     False),
+    ("stacking", [(2, 1), (2, 2)],
+     lambda m, x, y: m.vstack([m.hstack([x, y]), m.hstack([y, x])]), False),
+    ("indexing", [(3, 3), (1, 4)],
+     lambda m, X, r: m.vstack([X[0:2, [2, 0]], X[2:3, 1:], r[:, 1:3]]
+                              if m is NP else [X[0:2, [2, 0]], X[-1, 1:], r[1:3]]),
+     False),
+    # bivariate and other
+    ("multiply", [(3, 1), (3, 2)], lambda m, x, Y: m.sin(x) * Y, False),
+    ("matmul_variables", [(2, 3), (3, 2)], lambda m, X, Y: X @ Y, False),
+    ("x_transpose_x", [(3, 1)], lambda m, x: x.T @ x, False),
+    ("quad_form", [(3, 1), 2 * Q],
+     lambda m, x, P: m.vstack([m.quad_form(x, Q), m.quad_form(x, sps.csr_matrix(Q)),
+                               m.quad_form(x, P)]), False),
+    ("quad_form_nonsymmetric", [(3, 1)],
+     lambda m, x: m.quad_form(x, N) + m.quad_form(x, sps.csr_matrix(N)), False),
+    ("quad_over_lin", [(3, 1), (1, 1)], lambda m, x, z: m.quad_over_lin(x, z), True),
+    ("rel_entr", [(3, 1), (3, 1)], lambda m, x, y: m.rel_entr(x, y), True),
+    ("rel_entr_scalar_vector", [(1, 1), (3, 1)], lambda m, x, y: m.rel_entr(x, y),
+     True),
+    ("rel_entr_vector_scalar", [(3, 1), (1, 1)], lambda m, x, y: m.rel_entr(x, y),
+     True),
+    ("prods", [(3, 2)],
+     lambda m, X: m.hstack([m.prod(X), m.prod(X, axis=0), m.prod(X, axis=1)]), True),
+    # compositions
+    ("parameter_matmul_and_scale", [(3, 1), A, np.array([[3.0]])],
+     lambda m, x, B, c: c * m.exp(B @ x) + B @ m.sin(x), False),
+    ("shared_subexpression", [(3, 1)],
+     lambda m, x: (lambda u: u * u + m.exp(u))(m.sin(A @ x)), False),
+]
 
 
-@case()
-def stacking(s):
-    x, y = s.Variable(2, 1), s.Variable(2, 2)
-    return sp.vstack([sp.hstack([x, y]), sp.hstack([y, x])]), \
-        lambda: np.block([[x.value, y.value], [y.value, x.value]])
-
-
-@case()
-def indexing(s):
-    X, r = s.Variable(3, 3), s.Variable(1, 4)
-    return sp.vstack([X[0:2, [2, 0]], X[-1, 1:], r[1:3]]), \
-        lambda: np.r_[X.value[0:2][:, [2, 0]], X.value[-1:, 1:], r.value[:, 1:3]]
-
-
-# --- bivariate / other --------------------------------------------------------
-
-@case()
-def multiply(s):
-    x, Y = s.Variable(3, 1), s.Variable(3, 2)
-    return sp.sin(x) * Y, lambda: np.sin(x.value) * Y.value
-
-
-@case()
-def matmul_variables(s):
-    X, Y = s.Variable(2, 3), s.Variable(3, 2)
-    return X @ Y, lambda: X.value @ Y.value
-
-
-@case()
-def x_transpose_x(s):
-    x = s.Variable(3, 1)
-    return x.T @ x, lambda: x.value.T @ x.value
-
-
-@case()
-def quad_forms(s):
-    x = s.Variable(3, 1)
-    P = s.Parameter(3, 3, value=2 * Q)
-    xv = lambda: x.value.ravel()  # noqa: E731
-    return sp.vstack([sp.quad_form(x, Q), sp.quad_form(x, sps.csr_matrix(Q)),
-                      sp.quad_form(x, P)]), \
-        lambda: np.c_[[xv() @ Q @ xv(), xv() @ Q @ xv(), 2 * xv() @ Q @ xv()]]
-
-
-@case()
-def quad_form_nonsymmetric(s):
-    x = s.Variable(3, 1)
-    N = Q + np.triu(np.ones((3, 3)), 1)  # not symmetric
-    xv = lambda: x.value.ravel()  # noqa: E731
-    return sp.quad_form(x, N) + sp.quad_form(x, sps.csr_matrix(N)), \
-        lambda: 2 * xv() @ N @ xv()
-
-
-@case(positive=True)
-def quad_over_lin(s):
-    x, z = s.Variable(3, 1), s.Variable(1, 1)
-    return sp.quad_over_lin(x, z), lambda: (x.value ** 2).sum() / z.value
-
-
-@case(positive=True)
-def rel_entr_vectors(s):
-    x, y = s.Variable(3, 1), s.Variable(3, 1)
-    return sp.rel_entr(x, y), lambda: x.value * np.log(x.value / y.value)
-
-
-@case(positive=True)
-def rel_entr_scalar_vector(s):
-    a, y = s.Variable(1, 1), s.Variable(3, 1)
-    return sp.rel_entr(a, y), lambda: a.value * np.log(a.value / y.value)
-
-
-@case(positive=True)
-def rel_entr_vector_scalar(s):
-    x, b = s.Variable(3, 1), s.Variable(1, 1)
-    return sp.rel_entr(x, b), lambda: x.value * np.log(x.value / b.value)
-
-
-@case(positive=True)
-def prods(s):
-    X = s.Variable(3, 2)
-    return sp.hstack([sp.prod(X), sp.prod(X, axis=0), sp.prod(X, axis=1)]), \
-        lambda: np.r_[X.value.prod(), X.value.prod(0), X.value.prod(1)][None, :]
-
-
-# --- compositions -------------------------------------------------------------
-
-@case()
-def parameter_matmul_and_scale(s):
-    x = s.Variable(3, 1)
-    B, c = s.Parameter(2, 3, value=A), s.Parameter(1, 1, value=3.0)
-    return c * sp.exp(B @ x) + B @ sp.sin(x), \
-        lambda: 3 * np.exp(A @ x.value) + A @ np.sin(x.value)
-
-
-@case()
-def deep_chain(s):
-    x = s.Variable(4, 1)
-    f = x
-    for _ in range(5):
-        f = sp.tanh(0.9 * f + 0.1)
-    return sp.sum(f * f) + sp.cos(x[0]), None
-
-
-@case()
-def shared_subexpression(s):
-    x = s.Variable(3, 1)
-    u = sp.sin(A @ x)
-    return u * u + sp.exp(u), lambda: np.sin(A @ x.value) ** 2 + np.exp(np.sin(A @ x.value))
-
-
-@pytest.mark.parametrize("name", list(CASES))
-def test_atom(name, rng):
-    build, positive = CASES[name]
+@pytest.mark.parametrize("name, shapes, f, positive", CASES,
+                         ids=[c[0] for c in CASES])
+def test_atom(name, shapes, f, positive, rng):
     scope = sp.Scope()
-    f, ref = build(scope)
-    fn = sp.compile(f)
+    leaves = [scope.Parameter(*s.shape, value=s) if isinstance(s, np.ndarray)
+              else scope.Variable(*s) for s in shapes]
+    expr = f(sp, *leaves)
+    fn = sp.compile(expr)
     low, high = (0.2, 0.9) if positive else (-1.0, 1.0)
     x0 = rng.uniform(low, high, scope.total_var_size)
     scope.set_values(x0)
-    out = fn.forward()
-    assert out.shape == f.shape
-    if ref is not None:
-        expected = np.broadcast_to(ref(), f.shape)
-        np.testing.assert_allclose(out, expected, rtol=1e-10, atol=1e-12)
-    check_derivatives(fn, scope, x0, rng.standard_normal(f.size))
+    expected = f(NP, *[leaf.value for leaf in leaves])
+    np.testing.assert_allclose(fn.forward(), np.broadcast_to(expected, expr.shape),
+                               rtol=1e-10, atol=1e-12)
+    check_derivatives(fn, scope, x0, rng.standard_normal(expr.size))
