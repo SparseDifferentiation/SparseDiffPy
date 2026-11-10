@@ -103,7 +103,7 @@ print(res.x)  # approx. [0. 0.289 0.549 0.784], on the boundary ||x|| = 1
 
 ## Supported operations
 
-- **Operators:** `+ - * @ **`, `.T`, and indexing with ints, slices and integer lists: `x[1:3]` on a
+- **Operators:** `+ - * @ **`, `/` by a constant, `.T`, and indexing with ints, slices and integer lists: `x[1:3]` on a
   vector, `X[0, :]` or `X[[0, 2], 1]` on a matrix (a matrix always takes two indices).
   Scalars, rows and columns broadcast. NumPy arrays and `scipy.sparse` matrices are accepted as
   constants; like every expression they must be 2-D, so pass `a[:, None]` or `a[None, :]` for a 1-D `a`.

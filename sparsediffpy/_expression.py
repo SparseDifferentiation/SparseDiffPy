@@ -64,6 +64,16 @@ class Expression:
     def __rmul__(self, other):
         return _mul(cast_to_const(other), self)
 
+    def __truediv__(self, other):
+        """self / c for a constant c (a number or array), as self * (1 / c)."""
+        if isinstance(other, Expression) or sps.issparse(other):
+            raise TypeError("Can only divide by a constant number or dense array; "
+                            "for an expression d use x * d ** -1")
+        c = np.asarray(other, dtype=np.float64)
+        if np.any(c == 0):
+            raise ZeroDivisionError("division of an expression by zero")
+        return self * (1.0 / c)
+
     def __matmul__(self, other):
         return _matmul(self, cast_to_const(other))
 

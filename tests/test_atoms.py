@@ -61,6 +61,8 @@ CASES = [
     ("neg_sub", [(3, 1), (3, 1)], lambda m, x, y: -x - y + np.c_[0:3.0], False),
     ("constant_mult", [(3, 2)], lambda m, X: 2.0 * X * np.arange(6.0).reshape(3, 2),
      False),
+    ("constant_div", [(3, 2), (1, 1)],
+     lambda m, X, a: X / 2.0 + a / np.arange(1.0, 7.0).reshape(3, 2), False),
     ("matmul_dense", [(3, 1), (2, 3)], lambda m, x, Y: A @ x + (Y @ A.T)[:, 0:1],
      False),
     ("matmul_sparse", [(3, 1), (2, 3)],

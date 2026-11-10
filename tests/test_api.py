@@ -233,6 +233,16 @@ def test_numpy_scalar_exponent(scope):
     np.testing.assert_array_equal(f2.forward(), x.value ** 2)
 
 
+def test_division_only_by_nonzero_constants(scope):
+    x = scope.Variable(2, 1)
+    with pytest.raises(TypeError, match="d \\*\\* -1"):
+        x / x
+    with pytest.raises(TypeError):
+        1.0 / x
+    with pytest.raises(ZeroDivisionError):
+        x / np.array([[1.0], [0.0]])
+
+
 def test_quad_form_parameter_must_be_symmetric(scope):
     x = scope.Variable(2, 1)
     N, S = np.array([[1.0, 5.0], [0.0, 1.0]]), np.array([[1.0, 2.0], [2.0, 3.0]])
