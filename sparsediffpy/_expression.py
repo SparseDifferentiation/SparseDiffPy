@@ -137,7 +137,7 @@ class Variable(Expression):
     def value(self):
         """The variable's current entries, shaped like the variable."""
         flat = self._scope._values[self._offset:self._offset + self.size]
-        return flat.reshape(self.shape, order="F").copy()
+        return _read_only_copy(flat.reshape(self.shape, order="F"))
 
     @value.setter
     def value(self, val):
@@ -161,7 +161,7 @@ class Parameter(Expression):
         """The parameter's current value, or None if it was never set."""
         if self._flat is None:
             return None
-        return self._flat.reshape(self.shape, order="F").copy()
+        return _read_only_copy(self._flat.reshape(self.shape, order="F"))
 
     @value.setter
     def value(self, val):
@@ -194,6 +194,13 @@ def _flatten_shaped(val, shape):
                 and arr.size == shape[0] * shape[1])):
         raise DimensionError(f"expected shape {shape}, got {arr.shape}")
     return arr.ravel(order="F")
+
+
+def _read_only_copy(arr):
+    """A copy of arr that raises on assignment (edits would be silently lost)."""
+    arr = arr.copy()
+    arr.flags.writeable = False
+    return arr
 
 
 def _flatten_vector(val, n, name):
@@ -235,8 +242,10 @@ class Scope:
 
     def set_values(self, array):
         """Set all variables at once from a flat array (declaration order)."""
-        self._values[:] = _flatten_vector(array, self._values.size, "values")
-        self._values_version += 1
+        values = _flatten_vector(array, self._values.size, "values")
+        if not np.array_equal(values, self._values):  # same point: keep caches
+            self._values[:] = values
+            self._values_version += 1
 
     def get_values(self):
         """A copy of the flat variable vector (declaration order)."""
