@@ -37,7 +37,8 @@ size of all variables in the scope, in declaration order. Values must have
 the exact shape of what they set: `x.value` takes an array shaped like `x`,
 `hessian(w)` takes `w` shaped like `f` (for vectors a 1-D array also works),
 and flat vectors such as `scope.set_values(u)` must be 1-D. Flat vectors (the
-rows of the Jacobian, the scope values) are column-major.
+rows of the Jacobian, the scope values) are column-major. Reading `x.value`
+gives a read-only copy, so assign to `x.value` to change it.
 
 **Parameters** are data you can change without recompiling:
 
@@ -59,12 +60,12 @@ J2 = fn.jacobian()
 ## Using it in a solver
 
 `sp.Problem(objective, constraints)` exposes the callbacks NLP solvers ask for:
-objective value and gradient, constraint values and Jacobian, and the Lagrangian
-Hessian `obj_factor * H_f + sum_i lagrange_i * H_gi`. A stage runs in the engine
-only when its point changed: a forward called again with the same `u` (or with
-unchanged scope values and parameters) returns the cached result, and
-`gradient()`/`jacobian()` are reused until the matching forward moves. Returned
-arrays are owned by the problem, so do not modify them in place. Here it drives SciPy:
+`objective()`, `gradient()`, `constraints()`, `jacobian()` and the Lagrangian
+Hessian `hessian(obj_factor, lagrange)` = `obj_factor * H_f + sum_i lagrange_i * H_gi`.
+Like `compile`, everything is evaluated at the scope's current values, so a solver
+callback sets the flat point with `scope.set_values(u)` and then asks for what it
+needs, in any order. Each stage runs once per point and its result is a read-only
+array. Here it drives SciPy:
 
 ```python
 import numpy as np
@@ -78,25 +79,16 @@ x = scope.Variable(4, 1)
 c = np.array([[1.0], [2.0], [3.0], [4.0]])   # constants are 2-D, like variables
 prob = sp.Problem(sp.sum(sp.exp(x) - c * x), [sp.sum(x ** 2)])
 
-def grad(u):
-    prob.objective_forward(u)
-    return prob.gradient()
+def at(u, method, *args):  # evaluate prob.method(*args) at the flat point u
+    scope.set_values(u)
+    return getattr(prob, method)(*args)
 
-def obj_hess(u):  # the Lagrangian Hessian needs both forwards at u (cached if done)
-    prob.objective_forward(u); prob.constraint_forward(u)
-    return prob.hessian(1.0, [0.0])
-
-def con_jac(u):
-    prob.constraint_forward(u)
-    return prob.jacobian()
-
-def con_hess(u, v):
-    prob.objective_forward(u); prob.constraint_forward(u)
-    return prob.hessian(0.0, v)
-
-con = NonlinearConstraint(prob.constraint_forward, -np.inf, 1.0,
-                          jac=con_jac, hess=con_hess)
-res = minimize(prob.objective_forward, np.zeros(4), jac=grad, hess=obj_hess,
+con = NonlinearConstraint(lambda u: at(u, "constraints"), -np.inf, 1.0,
+                          jac=lambda u: at(u, "jacobian"),
+                          hess=lambda u, v: at(u, "hessian", 0.0, v))
+res = minimize(lambda u: at(u, "objective"), np.zeros(4),
+               jac=lambda u: at(u, "gradient"),
+               hess=lambda u: at(u, "hessian", 1.0, [0.0]),
                method="trust-constr", constraints=con)
 print(res.x)  # approx. [0. 0.289 0.549 0.784], on the boundary ||x|| = 1
 ```

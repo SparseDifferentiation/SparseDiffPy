@@ -326,35 +326,27 @@ def test_derivatives_reuse_forward_and_jacobian(scope, monkeypatch):
     assert (len(n_fwd), len(n_jac), len(n_hess)) == (2, 2, 3)
 
 
-def test_problem_skips_repeated_u(scope, monkeypatch):
-    n_fwd = count_calls(monkeypatch, "problem_constraint_forward")
-    x = scope.Variable(2, 1)
-    prob = sp.Problem(sp.sum(x), [sp.exp(x)])
-    prob.constraint_forward(np.array([1.0, 2.0]))
-    prob.constraint_forward(np.array([1.0, 2.0]))  # equal, distinct array
-    assert len(n_fwd) == 1
-    prob.constraint_forward(np.array([1.0, 3.0]))
-    assert len(n_fwd) == 2
-    prob.constraint_forward()  # scope values are a different point
-    assert len(n_fwd) == 3
-    np.testing.assert_allclose(prob.constraint_forward(), [1.0, 1.0])
-    assert len(n_fwd) == 3
-
-
-def test_derivatives_require_forward(scope):
-    x = scope.Variable(2, 1)
-    prob = sp.Problem(sp.sum(x), [sp.exp(x)])
-    with pytest.raises(RuntimeError, match="objective_forward"):
-        prob.gradient()
-    with pytest.raises(RuntimeError, match="constraint_forward"):
-        prob.jacobian()
-    prob.objective_forward([1.0, 2.0])
-    prob.constraint_forward([1.0, 3.0])
-    with pytest.raises(RuntimeError, match="same point"):
+def test_problem_runs_each_stage_once_per_point(scope, monkeypatch):
+    names = ["problem_objective_forward", "problem_constraint_forward",
+             "problem_gradient", "problem_jacobian", "problem_hessian"]
+    calls = {n: count_calls(monkeypatch, n) for n in names}
+    counts = lambda: tuple(len(calls[n]) for n in names)  # noqa: E731
+    x, a = scope.Variable(2, 1), scope.Parameter(1, 1, value=1.0)
+    prob = sp.Problem(sp.sum(a * x ** 2), [sp.exp(x)])
+    scope.set_values([1.0, 2.0])
+    for _ in range(2):
         prob.hessian(1.0, [1.0, 1.0])
-    prob.objective_forward([1.0, 2.0])  # a point is "the last u": redo both forwards
-    prob.constraint_forward([1.0, 2.0])
-    assert prob.hessian(1.0, [1.0, 1.0]).shape == (2, 2)
+        prob.objective(), prob.gradient(), prob.constraints(), prob.jacobian()
+    assert counts() == (1, 1, 1, 1, 2)
+    scope.set_values(np.array([1.0, 2.0]))  # equal values: same point
+    prob.gradient()
+    assert counts() == (1, 1, 1, 1, 2)
+    x.value = [1.0, 3.0]
+    prob.gradient()
+    assert counts() == (2, 1, 2, 1, 2)
+    a.value = 2.0
+    prob.jacobian()
+    assert counts() == (2, 2, 2, 2, 2)
 
 
 def test_problem(scope):
@@ -363,11 +355,11 @@ def test_problem(scope):
     prob = sp.Problem(sp.sum(sp.exp(shared)), [x[0:2] * x[1:3], shared])
     u = np.array([0.3, -0.5, 0.8])
     s, c = np.sin(u), np.cos(u)
+    scope.set_values(u)
 
-    assert prob.objective_forward(u) == pytest.approx(np.exp(s).sum())
+    assert prob.objective() == pytest.approx(np.exp(s).sum())
     np.testing.assert_allclose(prob.gradient(), np.exp(s) * c)
-    np.testing.assert_allclose(prob.constraint_forward(u),
-                               np.r_[u[:2] * u[1:], s])
+    np.testing.assert_allclose(prob.constraints(), np.r_[u[:2] * u[1:], s])
 
     J = prob.jacobian().toarray()
     np.testing.assert_allclose(J[:2], [[u[1], u[0], 0], [0, u[2], u[1]]])
@@ -381,37 +373,63 @@ def test_problem(scope):
 
     with pytest.raises(ValueError, match="lagrange"):
         prob.hessian(1.0, np.ones(4))
-    for bad in (np.zeros(2), np.zeros(4)):
-        with pytest.raises(sp.DimensionError, match="1-D array of 3 elements"):
-            prob.objective_forward(bad)
-        with pytest.raises(sp.DimensionError, match="1-D array of 3 elements"):
-            prob.constraint_forward(bad)
-    with pytest.raises(sp.DimensionError):
-        prob.objective_forward(u[:, None])
     with pytest.raises(sp.DimensionError, match="lagrange"):
         prob.hessian(1.0, lam[:, None])
     with pytest.raises(ValueError, match="scalar"):
         sp.Problem(x)
 
 
+def test_problem_without_constraints(scope):
+    x = scope.Variable(2, 1)
+    prob = sp.Problem(sp.sum(sp.exp(x)))
+    x.value = [0.0, 1.0]
+    np.testing.assert_allclose(prob.gradient(), np.exp([0.0, 1.0]))
+    assert prob.constraints().shape == (0,)
+    assert prob.jacobian().shape == (0, 2)
+    np.testing.assert_allclose(prob.hessian(1.0, []).diagonal(), np.exp([0.0, 1.0]))
+
+
 def test_problem_parameters(scope):
     x, a = scope.Variable(2, 1), scope.Parameter(1, 1, value=2.0)
     prob = sp.Problem(sp.sum(a * x ** 2))
-    u = np.array([1.0, 3.0])
-    assert prob.objective_forward(u) == pytest.approx(20.0)
+    x.value = [1.0, 3.0]
+    assert prob.objective() == pytest.approx(20.0)
     a.value = 0.5
-    assert prob.objective_forward(u) == pytest.approx(5.0)
-    np.testing.assert_allclose(prob.gradient(), u)
+    assert prob.objective() == pytest.approx(5.0)
+    np.testing.assert_allclose(prob.gradient(), [1.0, 3.0])
 
 
-def test_objective_and_constraints_at_different_points(scope):
-    x, a = scope.Variable(3, 1), scope.Parameter(1, 1, value=2.0)
-    e = sp.exp(a * x)  # shared by the objective and the constraint
-    prob = sp.Problem(sp.sum(e), [e])
-    prob.objective_forward(np.zeros(3))
-    prob.constraint_forward(np.ones(3))
-    np.testing.assert_allclose(prob.gradient(), [2.0, 2.0, 2.0])
-    np.testing.assert_allclose(prob.jacobian().diagonal(), 2 * np.exp([2.0] * 3))
+@pytest.mark.parametrize("shared", [True, False])
+def test_problem_interleaved_points(scope, shared):
+    """Moving the point between a forward and its derivative never goes stale."""
+    x = scope.Variable(3, 1)
+    e = sp.exp(x)
+    obj, con = (sp.sum(e), e * x) if shared else (sp.sum(x * x), sp.exp(x) * x)
+    grad = (lambda u: np.exp(u)) if shared else (lambda u: 2 * u)  # noqa: E731
+    jac = lambda u: np.exp(u) * (1 + u)  # noqa: E731
+    u1, u2 = np.zeros(3), np.array([1.0, 2.0, 3.0])
+    prob = sp.Problem(obj, [con])
+    scope.set_values(u1)
+    prob.objective()
+    scope.set_values(u2)
+    prob.constraints()
+    np.testing.assert_allclose(prob.gradient(), grad(u2))
+    scope.set_values(u1)
+    np.testing.assert_allclose(prob.jacobian().diagonal(), jac(u1))
+    np.testing.assert_allclose(prob.gradient(), grad(u1))
+
+
+def test_results_are_read_only(scope):
+    x, p = scope.Variable(2, 1), scope.Parameter(2, 1, value=[1.0, 2.0])
+    fn = sp.compile(p * sp.exp(x))
+    prob = sp.Problem(sp.sum(sp.exp(x)), [sp.exp(x)])
+    x.value = [0.0, 1.0]
+    for arr in (x.value, p.value, fn.forward(), fn.jacobian().data,
+                prob.constraints(), prob.gradient(), prob.jacobian().data):
+        with pytest.raises(ValueError, match="read-only"):
+            arr[0] = 5.0
+    np.testing.assert_array_equal(x.value, [[0.0], [1.0]])
+    assert scope.get_values().flags.writeable
 
 
 def test_hessian_without_prior_jacobian(scope):
@@ -429,8 +447,6 @@ def test_hessian_without_prior_jacobian(scope):
         H = np.block([[np.diag(d2(yv, yv)), off], [off, np.diag(d2(xv, xv))]])
         np.testing.assert_allclose(fn.hessian(w).toarray(), H, atol=1e-12)
 
-        prob.objective_forward(u)
-        prob.constraint_forward(u)
         H_prob = np.block([[np.zeros((2, 2)), np.diag(2.0 + w)],
                            [np.diag(2.0 + w), np.zeros((2, 2))]])
         np.testing.assert_allclose(prob.hessian(2.0, w).toarray(), H_prob,
@@ -485,10 +501,9 @@ def test_compile_deep_nonlinear_chain(scope):
     np.testing.assert_allclose(fn.hessian(1.0).toarray(), [[d2]], rtol=1e-8)
 
     prob = sp.Problem(sp.sum(g), [g])
-    u = np.array([x0])
-    assert prob.objective_forward(u) == pytest.approx(v, rel=1e-12)
+    assert prob.objective() == pytest.approx(v, rel=1e-12)
     np.testing.assert_allclose(prob.gradient(), [d1], rtol=1e-10)
-    np.testing.assert_allclose(prob.constraint_forward(u), [v], rtol=1e-12)
+    np.testing.assert_allclose(prob.constraints(), [v], rtol=1e-12)
     np.testing.assert_allclose(prob.jacobian().toarray(), [[d1]], rtol=1e-10)
     np.testing.assert_allclose(prob.hessian(1.0, [2.0]).toarray(), [[3 * d2]],
                                rtol=1e-8)
