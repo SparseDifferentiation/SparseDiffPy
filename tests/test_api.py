@@ -282,6 +282,18 @@ def test_parameter_update_without_recompile(scope):
         np.testing.assert_allclose(fn.jacobian().toarray(), J)
 
 
+def test_parameter_value_is_copied(scope):
+    """Editing the assigned array in place must not change the parameter."""
+    x = scope.Variable(2, 1)
+    x.value = [1.0, 2.0]
+    arr = np.ones(2)
+    p = scope.Parameter(2, 1, value=arr)
+    fn = sp.compile(sp.sum(p * x))
+    arr[:] = 10.0
+    np.testing.assert_array_equal(p.value, [[1.0], [1.0]])
+    assert fn.forward().item() == 3.0
+
+
 def test_unset_parameter_raises(scope):
     x, p = scope.Variable(2, 1), scope.Parameter(2, 1)
     fn = sp.compile(p * x)

@@ -178,7 +178,7 @@ class Parameter(Expression):
 
     @value.setter
     def value(self, val):
-        flat = _flatten_shaped(val, self.shape)
+        flat = _flatten_shaped(val, self.shape).copy()  # don't alias the caller's array
         if self._symmetric:
             _check_symmetric(flat, self.shape)
         self._flat = flat
