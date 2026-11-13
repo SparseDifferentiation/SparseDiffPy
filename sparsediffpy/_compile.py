@@ -108,7 +108,7 @@ class Problem:
         prob.constraints(); prob.jacobian()
         prob.hessian(obj_factor, lagrange)
 
-    Each stage runs in the engine at most once per point (scope values and
+    Each engine call runs at most once per point (scope values and
     parameters), and the results are read-only arrays.
     """
 
@@ -132,9 +132,10 @@ class Problem:
         self._param_version = None
         self.n_vars = self._scope.total_var_size
         self.total_constraint_size = sum(c.size for c in constraints)
-        # The engine holds one point. _key identifies it (scope values and
-        # parameters); _done holds the stages already computed there.
-        self._key, self._done = None, {}
+        # The engine holds one point; _key identifies it (scope values and
+        # parameters). Results computed there are cached until it moves.
+        self._key = None
+        self._obj = self._con = self._grad = self._jac = None
 
     def _sync_params(self):
         """Push Parameter values to the engine if any changed since last time."""
@@ -149,47 +150,53 @@ class Problem:
         _C.problem_update_params(self._capsule, theta)
         self._param_version = self._scope._param_version
 
-    def _stage(self, name, run):
-        """Result of stage ``name`` at the current point, computed at most once."""
+    def _refresh(self):
+        """Forget cached results if the scope's values or parameters changed."""
         key = (self._scope._values_version, self._scope._param_version)
         if key != self._key:
             self._sync_params()
-            self._key, self._done = key, {}
-        if name not in self._done:
-            self._done[name] = run(self._scope._values[:self.n_vars])
-        return self._done[name]
+            self._key = key
+            self._obj = self._con = self._grad = self._jac = None
+
+    def _u(self):
+        """The flat variable vector this problem is evaluated at."""
+        return self._scope._values[:self.n_vars]
 
     def objective(self):
         """Objective value (float)."""
-        return self._stage(
-            "obj", lambda u: _C.problem_objective_forward(self._capsule, u))
+        self._refresh()
+        if self._obj is None:
+            self._obj = _C.problem_objective_forward(self._capsule, self._u())
+        return self._obj
 
     def constraints(self):
         """Stacked constraint values, shape (total_constraint_size,)."""
-        return self._stage("con", lambda u: _read_only(
-            _C.problem_constraint_forward(self._capsule, u)))
+        self._refresh()
+        if self._con is None:
+            self._con = _read_only(
+                _C.problem_constraint_forward(self._capsule, self._u()))
+        return self._con
 
     def gradient(self):
         """Objective gradient, shape (n_vars,)."""
         self.objective()
-        return self._stage("grad", lambda u: _read_only(
-            _C.problem_gradient(self._capsule)))
+        if self._grad is None:
+            self._grad = _read_only(_C.problem_gradient(self._capsule))
+        return self._grad
 
     def jacobian(self):
         """Constraint Jacobian, csr_matrix of shape (total_constraint_size, n_vars)."""
         self.constraints()
-
-        def run(u):
-            J = _csr(_C.problem_jacobian(self._capsule))
-            for a in (J.data, J.indices, J.indptr):
+        if self._jac is None:
+            self._jac = _csr(_C.problem_jacobian(self._capsule))
+            for a in (self._jac.data, self._jac.indices, self._jac.indptr):
                 _read_only(a)
-            return J
-        return self._stage("jac", run)
+        return self._jac
 
     def hessian(self, obj_factor, lagrange):
         """Lagrangian Hessian obj_factor H_f + sum_i lagrange_i H_gi (csr_matrix)."""
         lagrange = _flatten_vector(lagrange, self.total_constraint_size, "lagrange")
-        # The engine's Hessian reads values cached by the forwards, the gradient
+        # The engine's Hessian reads values left by the forwards, the gradient
         # and the Jacobian, so all four must be current (no-ops if they are).
         self.gradient()
         self.jacobian()
