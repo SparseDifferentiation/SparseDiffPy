@@ -354,12 +354,15 @@ def _matmul_with_data(make, A):
 def index_flat(x, flat_indices, shape):
     """Gather entries of ``x`` by column-major flat indices into ``shape``."""
     x = cast_to_const(x)
-    idx = np.asarray(flat_indices, dtype=np.int32).ravel()
+    idx = np.asarray(flat_indices).ravel()
+    if idx.size and not np.issubdtype(idx.dtype, np.integer):
+        raise TypeError(f"flat indices must be integers, got dtype {idx.dtype}")
     shape = _check_shape(*shape)
     if idx.size != shape[0] * shape[1]:
         raise ValueError(f"{idx.size} indices do not fill shape {shape}")
     if idx.size and (idx.min() < 0 or idx.max() >= x.size):
         raise IndexError(f"flat index out of range for size {x.size}")
+    idx = idx.astype(np.int32)  # safe now that all are in range; also copies
     return Node(lambda c: _C.make_index(c, shape[0], shape[1], idx), [x], shape)
 
 
