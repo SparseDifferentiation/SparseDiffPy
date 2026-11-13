@@ -23,7 +23,19 @@ def _check_shape(d1, d2):
         raise TypeError(f"Shape dimensions must be integers, got ({d1!r}, {d2!r})")
     if d1 <= 0 or d2 <= 0:
         raise ValueError(f"Shape dimensions must be positive, got ({d1}, {d2})")
-    return (int(d1), int(d2))
+    shape = (int(d1), int(d2))
+    _check_size(shape)
+    return shape
+
+
+_MAX_SIZE = 2**31 - 1  # the engine stores sizes as C int
+
+
+def _check_size(shape):
+    """Raise if a shape has more entries than the engine can index."""
+    if shape[0] * shape[1] > _MAX_SIZE:
+        raise ValueError(f"Shape {shape} has {shape[0] * shape[1]} entries; "
+                         f"the engine supports at most {_MAX_SIZE}")
 
 
 class Expression:
@@ -101,6 +113,7 @@ class Node(Expression):
         self.make = make
         self.args = tuple(args)
         self.shape = tuple(shape)
+        _check_size(self.shape)
 
 
 class Constant(Expression):

@@ -72,6 +72,18 @@ def test_invalid_shapes(scope, shape):
         scope.Variable(*shape)
 
 
+def test_too_many_entries(scope):
+    """Sizes are C ints in the engine; larger shapes must fail before reaching C."""
+    big = (65536, 65537)  # 2**32 + 65536 entries
+    x = scope.Variable(1, 1)
+    a, b = scope.Variable(65536, 1), scope.Variable(1, 65537)
+    for make in (lambda: scope.Variable(*big), lambda: scope.Parameter(*big),
+                 lambda: sp.broadcast(x, big), lambda: a @ b):
+        with pytest.raises(ValueError, match="at most"):
+            make()
+    assert sp.broadcast(x, (2**31 - 1, 1)).size == 2**31 - 1
+
+
 def test_reevaluates_at_new_values(scope):
     x = scope.Variable(2, 1)
     fn = sp.compile(sp.exp(x))
