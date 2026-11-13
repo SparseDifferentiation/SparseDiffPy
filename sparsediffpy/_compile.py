@@ -189,8 +189,9 @@ class Problem:
         self.constraints()
         if self._jac is None:
             self._jac = _csr(_C.problem_jacobian(self._capsule))
-            for a in (self._jac.data, self._jac.indices, self._jac.indptr):
-                _read_only(a)
+            _read_only(self._jac.data)
+            _read_only(self._jac.indices)
+            _read_only(self._jac.indptr)
         return self._jac
 
     def hessian(self, obj_factor, lagrange):
