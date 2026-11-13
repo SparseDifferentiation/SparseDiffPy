@@ -237,6 +237,21 @@ def test_index_flat_wraps_constants(scope):
     np.testing.assert_array_equal(fn.forward(), [[7.0]])
 
 
+def test_index_flat_checks_before_casting(scope):
+    """Indices are validated as given, not after conversion to int32."""
+    x = scope.Variable(3, 1)
+    with pytest.raises(IndexError):
+        sp.index_flat(x, np.array([2**32 + 1]), (1, 1))  # would wrap to 1
+    for bad in ([1.7], [True]):
+        with pytest.raises(TypeError):
+            sp.index_flat(x, bad, (1, 1))
+    idx = np.array([0, 1], dtype=np.int32)
+    e = sp.index_flat(x, idx, (2, 1))
+    idx[1] = 10**6  # editing the array afterwards must not reach the engine
+    x.value = [10.0, 20.0, 30.0]
+    np.testing.assert_array_equal(sp.compile(e).forward(), [[10.0], [20.0]])
+
+
 def test_numpy_scalar_exponent(scope):
     x = scope.Variable(2, 1)
     f1, f2 = sp.compile(x ** np.int64(2)), sp.compile(x ** np.float32(2))
