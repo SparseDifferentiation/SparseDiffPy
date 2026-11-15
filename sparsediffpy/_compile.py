@@ -75,7 +75,11 @@ class _Builder:
             cap = _C.make_parameter(d1, d2, e._offset, self.n_vars, values)
             self.params.append((e, cap))
         elif isinstance(e, Constant):
-            _check_size(e.shape)  # a sparse constant may be too large to densify
+            # Only a constant used as an ordinary operand (e.g. sum(A) or A * x)
+            # gets here, and it becomes a dense engine parameter even if its
+            # value is sparse. The matrix of a matmul or quad_form does not: it
+            # is passed to its node as CSR.
+            _check_size(e.shape)
             values = e.dense().ravel(order="F")
             cap = _C.make_parameter(d1, d2, -1, self.n_vars, values)
         else:
