@@ -38,6 +38,14 @@ def _check_size(shape):
                          f"the engine supports at most {_MAX_SIZE}")
 
 
+def _check_sparse_size(shape, nnz):
+    """Raise if a sparse matrix has more rows, columns or nonzeros than that."""
+    if max(*shape, nnz) > _MAX_SIZE:
+        raise ValueError(f"Sparse matrix of shape {shape} with {nnz} nonzeros; "
+                         f"the engine supports at most {_MAX_SIZE} rows, "
+                         f"columns and nonzeros")
+
+
 class Expression:
     """Base class for all expressions. Supports + - * @ ** [] and .T."""
 
@@ -117,13 +125,22 @@ class Node(Expression):
 
 
 class Constant(Expression):
-    """Fixed dense or scipy.sparse data."""
+    """Fixed dense or scipy.sparse data.
+
+    A sparse value is stored as CSR, so it may have more than INT_MAX entries
+    as long as its nonzeros fit. It can then only be the matrix of a matmul or
+    quad_form; any other use needs it dense and fails when compiled.
+    """
 
     def __init__(self, value):
         if value is None:
             raise TypeError("Constant value cannot be None")
         if sps.issparse(value):
             self.value = sps.csr_matrix(value, dtype=np.float64)
+            self.shape = tuple(int(d) for d in self.value.shape)
+            if 0 in self.shape:
+                raise ValueError(f"Shape dimensions must be positive, got {self.shape}")
+            _check_sparse_size(self.shape, self.value.nnz)
         else:
             value = np.asarray(value, dtype=np.float64)
             if value.size == 1:
@@ -133,7 +150,7 @@ class Constant(Expression):
                     f"Constants must be scalars or 2-D arrays, (n, 1) or (1, n); "
                     f"got shape {value.shape}. Use a[:, None] or a[None, :].")
             self.value = value
-        self.shape = _check_shape(*self.value.shape)
+            self.shape = _check_shape(*self.value.shape)
 
     def dense(self):
         """The value as a dense array."""

@@ -11,7 +11,8 @@ import scipy.sparse as sps
 
 from sparsediffpy import _sparsediffengine as _C
 from sparsediffpy._expression import (
-    Constant, Parameter, Variable, _flatten_shaped, _flatten_vector, cast_to_const,
+    Constant, Parameter, Variable, _check_size, _flatten_shaped, _flatten_vector,
+    cast_to_const,
 )
 
 
@@ -74,6 +75,7 @@ class _Builder:
             cap = _C.make_parameter(d1, d2, e._offset, self.n_vars, values)
             self.params.append((e, cap))
         elif isinstance(e, Constant):
+            _check_size(e.shape)  # a sparse constant may be too large to densify
             values = e.dense().ravel(order="F")
             cap = _C.make_parameter(d1, d2, -1, self.n_vars, values)
         else:
