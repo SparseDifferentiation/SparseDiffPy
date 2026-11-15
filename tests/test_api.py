@@ -4,6 +4,7 @@ import sys
 
 import numpy as np
 import pytest
+import scipy.sparse as sps
 
 import sparsediffpy as sp
 from sparsediffpy import _compile
@@ -82,6 +83,25 @@ def test_too_many_entries(scope):
         with pytest.raises(ValueError, match="at most"):
             make()
     assert sp.broadcast(x, (2**31 - 1, 1)).size == 2**31 - 1
+
+
+def test_large_sparse_constant(scope):
+    """A sparse constant is limited by its nonzeros, not by rows times columns."""
+    m, n = 65536, 65537  # 2**32 + 65536 entries
+    rows, cols = np.array([0, 1, m - 1]), np.array([n - 1, 0, 2])
+    A = sps.csr_matrix((np.array([1.0, 2.0, 3.0]), (rows, cols)), (m, n))
+    x = scope.Variable(n, 1)
+    x.value = np.arange(n, dtype=float)
+    fn = sp.compile(A @ x)
+    np.testing.assert_array_equal(fn.forward().ravel(), A @ np.arange(n))
+    assert abs(fn.jacobian() - A).max() == 0
+    row = scope.Variable(1, m)
+    assert abs(sp.compile(row @ A).jacobian()[:, n:] - A.T).max() == 0
+    # any other use would need the matrix dense
+    with pytest.raises(ValueError, match="at most"):
+        sp.compile(sp.sum(A) * x)
+    with pytest.raises(ValueError, match="at most"):
+        A * scope.Variable(1, 1)
 
 
 def test_reevaluates_at_new_values(scope):
