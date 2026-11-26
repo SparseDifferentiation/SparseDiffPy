@@ -90,10 +90,10 @@ class _Builder:
         return cap
 
 
-def _csr(triple):
-    """scipy CSR matrix from an engine (data, indices, indptr, shape) tuple."""
-    data, indices, indptr, shape = triple
-    return sps.csr_matrix((data, indices, indptr), shape=shape)
+def _csr_view(views):
+    """csr_matrix sharing the engine's (data, indices, indptr, shape) views."""
+    data, indices, indptr, shape = views
+    return sps.csr_matrix((data, indices, indptr), shape=shape, copy=False)
 
 
 def _read_only(arr):
@@ -116,6 +116,11 @@ class Problem:
 
     Each engine call runs at most once per point (scope values and
     parameters), and the results are read-only arrays.
+
+    ``jacobian()`` and ``hessian()`` each return the same csr_matrix on every
+    call: its sparsity pattern is fixed and its values are refreshed in place,
+    so no matrix is built or copied per evaluation. A later evaluation
+    overwrites the values, so ``.copy()`` a result you want to keep.
     """
 
     def __init__(self, objective, constraints=(), verbose=False):
@@ -141,7 +146,12 @@ class Problem:
         # The engine holds one point; _key identifies it (scope values and
         # parameters). Results computed there are cached until it moves.
         self._key = None
-        self._obj = self._con = self._grad = self._jac = None
+        self._obj = self._con = self._grad = None
+        # The Jacobian and the Hessian are built once, on the engine's own
+        # storage; evaluating refreshes their values in place.
+        self._jac = _csr_view(_C.problem_jacobian_csr(self._capsule))
+        self._hess = _csr_view(_C.problem_hessian_csr(self._capsule))
+        self._jac_current = False
 
     def _sync_params(self):
         """Push Parameter values to the engine if any changed since last time."""
@@ -162,7 +172,8 @@ class Problem:
         if key != self._key:
             self._sync_params()
             self._key = key
-            self._obj = self._con = self._grad = self._jac = None
+            self._obj = self._con = self._grad = None
+            self._jac_current = False
 
     def _u(self):
         """The flat variable vector this problem is evaluated at."""
@@ -191,23 +202,30 @@ class Problem:
         return self._grad
 
     def jacobian(self):
-        """Constraint Jacobian, csr_matrix of shape (total_constraint_size, n_vars)."""
+        """Constraint Jacobian, csr_matrix of shape (total_constraint_size, n_vars).
+
+        The same matrix is returned on every call, with its values refreshed
+        in place; copy it to keep the values of this point.
+        """
         self.constraints()
-        if self._jac is None:
-            self._jac = _csr(_C.problem_jacobian(self._capsule))
-            _read_only(self._jac.data)
-            _read_only(self._jac.indices)
-            _read_only(self._jac.indptr)
+        if not self._jac_current:
+            _C.problem_jacobian_eval(self._capsule)
+            self._jac_current = True
         return self._jac
 
     def hessian(self, obj_factor, lagrange):
-        """Lagrangian Hessian obj_factor H_f + sum_i lagrange_i H_gi (csr_matrix)."""
+        """Lagrangian Hessian obj_factor H_f + sum_i lagrange_i H_gi (csr_matrix).
+
+        The same matrix is returned on every call, with its values refreshed
+        in place; copy it to keep the values of this call.
+        """
         lagrange = _flatten_vector(lagrange, self.total_constraint_size, "lagrange")
         # The engine's Hessian reads values left by the forwards, the gradient
         # and the Jacobian, so all four must be current (no-ops if they are).
         self.gradient()
         self.jacobian()
-        return _csr(_C.problem_hessian(self._capsule, float(obj_factor), lagrange))
+        _C.problem_hessian_eval(self._capsule, float(obj_factor), lagrange)
+        return self._hess
 
 
 class CompiledExpression:
@@ -222,13 +240,17 @@ class CompiledExpression:
         return self._problem.constraints().reshape(self.shape, order="F")
 
     def jacobian(self):
-        """Sparse Jacobian df/dx, shape (f.size, n_vars)."""
+        """Sparse Jacobian df/dx, shape (f.size, n_vars).
+
+        Returned as one reused csr_matrix; see ``Problem.jacobian``.
+        """
         return self._problem.jacobian()
 
     def hessian(self, weights):
         """Sparse Hessian of sum(weights * f(x)), shape (n_vars, n_vars).
 
         weights has f's shape (a 1-D array is also accepted when f is a vector).
+        Returned as one reused csr_matrix; see ``Problem.hessian``.
         """
         return self._problem.hessian(0.0, _flatten_shaped(weights, self.shape))
 

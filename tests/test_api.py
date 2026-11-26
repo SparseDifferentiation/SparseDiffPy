@@ -369,8 +369,8 @@ def test_forward_runs_once_per_point(scope, monkeypatch):
 
 def test_derivatives_reuse_forward_and_jacobian(scope, monkeypatch):
     n_fwd = count_calls(monkeypatch, "problem_constraint_forward")
-    n_jac = count_calls(monkeypatch, "problem_jacobian")
-    n_hess = count_calls(monkeypatch, "problem_hessian")
+    n_jac = count_calls(monkeypatch, "problem_jacobian_eval")
+    n_hess = count_calls(monkeypatch, "problem_hessian_eval")
     x = scope.Variable(2, 1)
     fn = sp.compile(sp.exp(x))
     x.value = [0.5, -0.5]
@@ -387,7 +387,7 @@ def test_derivatives_reuse_forward_and_jacobian(scope, monkeypatch):
 
 def test_problem_runs_each_stage_once_per_point(scope, monkeypatch):
     names = ["problem_objective_forward", "problem_constraint_forward",
-             "problem_gradient", "problem_jacobian", "problem_hessian"]
+             "problem_gradient", "problem_jacobian_eval", "problem_hessian_eval"]
     calls = {n: count_calls(monkeypatch, n) for n in names}
     counts = lambda: tuple(len(calls[n]) for n in names)  # noqa: E731
     x, a = scope.Variable(2, 1), scope.Parameter(1, 1, value=1.0)
@@ -483,12 +483,84 @@ def test_results_are_read_only(scope):
     fn = sp.compile(p * sp.exp(x))
     prob = sp.Problem(sp.sum(sp.exp(x)), [sp.exp(x)])
     x.value = [0.0, 1.0]
+    J, H = prob.jacobian(), prob.hessian(1.0, [1.0, 1.0])
     for arr in (x.value, p.value, fn.forward(), fn.jacobian().data,
-                prob.constraints(), prob.gradient(), prob.jacobian().data):
+                prob.constraints(), prob.gradient(),
+                J.data, J.indices, J.indptr, H.data, H.indices, H.indptr):
         with pytest.raises(ValueError, match="read-only"):
             arr[0] = 5.0
     np.testing.assert_array_equal(x.value, [[0.0], [1.0]])
     assert scope.get_values().flags.writeable
+
+
+def test_jacobian_and_hessian_are_reused_in_place(scope):
+    """One matrix per problem; its values follow the point and the weights."""
+    x = scope.Variable(2, 1)
+    prob = sp.Problem(sp.sum(sp.exp(x)), [x ** 2])
+    fn = sp.compile(sp.exp(x))
+    x.value = [1.0, 2.0]
+    J, H, Jf = prob.jacobian(), prob.hessian(1.0, [0.0, 0.0]), fn.jacobian()
+    J1, H1 = J.copy(), H.copy()  # a copy keeps the values of this evaluation
+    np.testing.assert_allclose(J.toarray(), np.diag([2.0, 4.0]))
+    np.testing.assert_allclose(H.toarray(), np.diag(np.exp([1.0, 2.0])))
+
+    assert prob.hessian(0.0, [1.0, 3.0]) is H  # new weights, same matrix
+    np.testing.assert_allclose(H.toarray(), np.diag([2.0, 6.0]))
+
+    x.value = [3.0, -1.0]
+    assert prob.jacobian() is J and fn.jacobian() is Jf
+    np.testing.assert_allclose(J.toarray(), np.diag([6.0, -2.0]))
+    np.testing.assert_allclose(Jf.toarray(), np.diag(np.exp([3.0, -1.0])))
+    assert prob.hessian(1.0, [0.0, 0.0]) is H
+    np.testing.assert_allclose(H.toarray(), np.diag(np.exp([3.0, -1.0])))
+    np.testing.assert_allclose(J1.toarray(), np.diag([2.0, 4.0]))
+    np.testing.assert_allclose(H1.toarray(), np.diag(np.exp([1.0, 2.0])))
+
+
+def test_reused_matrices_match_the_copying_bindings(scope, rng):
+    x, y = scope.Variable(3, 1), scope.Variable(3, 1)
+    A = rng.standard_normal((4, 3))
+    prob = sp.Problem(sp.sum(sp.exp(A @ x) * sp.sum(y ** 2)),
+                      [x * y, sp.sin(A @ x), x + y])
+    for _ in range(4):
+        scope.set_values(rng.standard_normal(6))
+        lam = rng.standard_normal(prob.total_constraint_size)
+        J, H = prob.jacobian(), prob.hessian(0.7, lam)
+        for M, ref in ((J, _compile._C.problem_jacobian(prob._capsule)),
+                       (H, _compile._C.problem_hessian(prob._capsule, 0.7, lam))):
+            data, indices, indptr, shape = ref
+            np.testing.assert_array_equal(M.data, data)
+            np.testing.assert_array_equal(M.indices, indices)
+            np.testing.assert_array_equal(M.indptr, indptr)
+            assert M.shape == shape
+
+
+def test_reused_matrices_outlive_the_problem():
+    """The matrices view engine memory, which they must keep alive."""
+    import gc
+
+    def build():
+        scope = sp.Scope()
+        x = scope.Variable(3, 1)
+        prob = sp.Problem(sp.sum(sp.exp(x)), [x ** 2])
+        x.value = [1.0, 2.0, 3.0]
+        return prob.jacobian(), prob.hessian(1.0, [0.0, 0.0, 0.0])
+
+    J, H = build()
+    gc.collect()
+    np.zeros(1000)  # give freed memory a chance to be reused
+    np.testing.assert_allclose(J.toarray(), np.diag([2.0, 4.0, 6.0]))
+    np.testing.assert_allclose(H.toarray(), np.diag(np.exp([1.0, 2.0, 3.0])))
+
+
+def test_jacobian_and_hessian_without_constraints(scope):
+    x = scope.Variable(3, 1)
+    prob = sp.Problem(sp.sum(x ** 2))
+    x.value = [1.0, 2.0, 3.0]
+    J = prob.jacobian()
+    assert J.shape == (0, 3) and J.nnz == 0
+    np.testing.assert_allclose(prob.hessian(1.0, []).toarray(), 2.0 * np.eye(3))
+    assert prob.hessian(1.0, []) is prob.hessian(2.0, [])
 
 
 def test_hessian_without_prior_jacobian(scope):
