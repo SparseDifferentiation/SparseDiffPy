@@ -52,10 +52,15 @@ A = scope.Parameter(2, 3, value=np.ones((2, 3)))
 fn = sp.compile(sp.sin(A @ x))
 
 x.value = [0.1, 0.2, 0.3]
-J1 = fn.jacobian()
+J1 = fn.jacobian().copy()                # keep this Jacobian (see below)
 A.value = np.arange(6.0).reshape(2, 3)   # no recompile needed
 J2 = fn.jacobian()
 ```
+
+`jacobian()` and `hessian(w)` each return the same `csr_matrix` on every call. Its
+sparsity pattern is fixed and its values are refreshed in place, so an evaluation
+builds and copies nothing. The next evaluation overwrites the values: call `.copy()`
+on a result you want to keep, as for `J1` above.
 
 ## Using it in a solver
 
@@ -65,7 +70,9 @@ Hessian `hessian(obj_factor, lagrange)` = `obj_factor * H_f + sum_i lagrange_i *
 Like `compile`, everything is evaluated at the scope's current values, so a solver
 callback sets the flat point with `scope.set_values(u)` and then asks for what it
 needs, in any order. Each stage runs once per point and its result is a read-only
-array. Here it drives SciPy:
+array. As with `compile`, `jacobian()` and `hessian(...)` each reuse one
+`csr_matrix`, so copy a result that has to survive the next evaluation. Here it
+drives SciPy:
 
 ```python
 import numpy as np
@@ -83,12 +90,13 @@ def at(u, method, *args):  # evaluate prob.method(*args) at the flat point u
     scope.set_values(u)
     return getattr(prob, method)(*args)
 
+# SciPy keeps the matrices of earlier points, so the callbacks return copies
 con = NonlinearConstraint(lambda u: at(u, "constraints"), -np.inf, 1.0,
-                          jac=lambda u: at(u, "jacobian"),
-                          hess=lambda u, v: at(u, "hessian", 0.0, v))
+                          jac=lambda u: at(u, "jacobian").copy(),
+                          hess=lambda u, v: at(u, "hessian", 0.0, v).copy())
 res = minimize(lambda u: at(u, "objective"), np.zeros(4),
                jac=lambda u: at(u, "gradient"),
-               hess=lambda u: at(u, "hessian", 1.0, [0.0]),
+               hess=lambda u: at(u, "hessian", 1.0, [0.0]).copy(),
                method="trust-constr", constraints=con)
 print(res.x)  # approx. [0. 0.289 0.549 0.784], on the boundary ||x|| = 1
 ```

@@ -54,6 +54,7 @@
 /* Include problem bindings */
 #include "problem/constraint_forward.h"
 #include "problem/gradient.h"
+#include "problem/csr_views.h"
 #include "problem/hessian.h"
 #include "problem/init_derivatives.h"
 #include "problem/init_hessian.h"
@@ -165,6 +166,14 @@ static PyMethodDef DNLPMethods[] = {
      "Get constraint jacobian without recomputing"},
     {"problem_hessian", py_problem_hessian, METH_VARARGS,
      "Compute Lagrangian Hessian"},
+    {"problem_jacobian_csr", py_problem_jacobian_csr, METH_O,
+     "Read-only views (data, indices, indptr, shape) of the Jacobian's storage"},
+    {"problem_hessian_csr", py_problem_hessian_csr, METH_O,
+     "Read-only views (data, indices, indptr, shape) of the Hessian's storage"},
+    {"problem_jacobian_eval", py_problem_jacobian_eval, METH_O,
+     "Refresh the Jacobian values in place"},
+    {"problem_hessian_eval", py_problem_hessian_eval, METH_VARARGS,
+     "Refresh the Lagrangian Hessian values in place"},
     {"get_hessian", py_get_hessian, METH_VARARGS,
      "Get Lagrangian Hessian without recomputing"},
     {"problem_init_jacobian_coo", py_problem_init_jacobian_coo, METH_VARARGS,
